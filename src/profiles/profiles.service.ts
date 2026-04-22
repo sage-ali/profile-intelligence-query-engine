@@ -15,7 +15,7 @@ import {
   EnrichedProfile,
 } from './types/profiles.types';
 import { buildProfileQuery } from './utils/build-profile-query';
-import { GetProfilesQueryDto } from './dto/get-profiles-query.dto';
+import { BuildProfileQueryInput } from './types/profile-query.types';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { uuidv7 } from 'uuidv7';
 import { Prisma } from '@prisma/client';
@@ -231,7 +231,7 @@ export class ProfilesService {
    * @param filters - An object containing optional filters for gender, country_id, and age_group.
    * @returns A promise that resolves to an object containing the total count and the list of profiles.
    */
-  async findAllProfiles(query: GetProfilesQueryDto) {
+  async findAllProfiles(query: BuildProfileQueryInput) {
     const { where, orderBy, skip, take, page, limit } =
       buildProfileQuery(query);
 

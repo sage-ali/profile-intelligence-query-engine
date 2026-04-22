@@ -20,6 +20,7 @@ import {
   ProfileSuccessWithMessageResponseDto,
   ProfileListResponseDto,
 } from './dto/profile-response.dto';
+import { NlqService } from './utils/nlq-service';
 
 /**
  * Controller for managing user profiles.
@@ -28,7 +29,10 @@ import {
 @ApiTags('profiles')
 @Controller('profiles')
 export class ProfilesController {
-  constructor(private readonly profilesService: ProfilesService) {}
+  constructor(
+    private readonly profilesService: ProfilesService,
+    private readonly nlqService: NlqService,
+  ) {}
 
   /**
    * Creates a new profile or retrieves an existing one.
@@ -112,6 +116,43 @@ export class ProfilesController {
       }
       throw error;
     }
+  }
+
+  @Get('search')
+  @ApiOperation({
+    summary: 'Get all profiles with natural language filtering',
+    description:
+      'Retrieves all profiles with matching the natural language query.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Profiles retrieved successfully',
+    type: ProfileListResponseDto,
+  })
+  async search(@Query('q') q: string): Promise<ProfileListResponseDto> {
+    const parsed = this.nlqService.parse(q);
+    console.log(parsed);
+    const { page, limit, total, data } =
+      await this.profilesService.findAllProfiles(parsed);
+
+    return {
+      status: 'success',
+      page,
+      limit,
+      total,
+      data: data.map((profile) => ({
+        id: profile.id,
+        name: profile.name,
+        gender: profile.gender,
+        gender_probability: profile.gender_probability,
+        age: profile.age,
+        age_group: profile.age_group,
+        country_id: profile.country_id,
+        country_name: profile.country_name,
+        country_probability: profile.country_probability,
+        created_at: profile.created_at,
+      })),
+    };
   }
 
   /**

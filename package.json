@@ -25,6 +25,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
+    "docker:start": "docker start intelligence-profile-db",
+    "docker:stop": "docker stop intelligence-profile-db",
     "db:push": "prisma db push",
     "prepare": "husky"
   },

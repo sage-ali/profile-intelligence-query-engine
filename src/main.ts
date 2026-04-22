@@ -47,9 +47,9 @@ async function bootstrap() {
 
   // Swagger configuration
   const config = new DocumentBuilder()
-    .setTitle('Name Gender Classification API')
+    .setTitle('Intelligent profile API')
     .setDescription(
-      'A NestJS-based REST API that predicts the gender of a given name using the Genderize.io service.',
+      'A NestJS-based REST API that creates an intelligent profile based on searched name.',
     )
     .setVersion('1.0')
     .addTag('classification')

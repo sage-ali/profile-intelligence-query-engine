@@ -1,0 +1,66 @@
+name: CI - Test Render Deploy
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-render-deploy:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      # Test the EXACT Render deploy sequence
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Generate Prisma Client
+        run: pnpm run prisma:generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test Prisma DB Push & Seed
+        run: |
+          pnpm run db:push
+          pnpm run db:seed
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      # Validate render.yaml blueprint syntax
+      - name: Validate Render Blueprint
+        uses: renderinc/action-blueprint-validate@v1
+        # Or install Render CLI and run: render blueprints validate render.yaml

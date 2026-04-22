@@ -29,10 +29,10 @@ export class ProfileResponseDto {
   gender_probability!: number;
 
   /**
-   * Number of samples used for prediction.
+   * Full country name.
    */
-  @ApiProperty()
-  sample_size!: number;
+  @ApiProperty({ example: 'United States' })
+  country_name!: string;
 
   /**
    * Predicted age associated with the name.

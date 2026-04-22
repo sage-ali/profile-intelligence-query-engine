@@ -52,10 +52,10 @@ Create or retrieve an enriched profile.
     "name": "peter",
     "gender": "male",
     "gender_probability": 0.99,
-    "sample_size": 100,
     "age": 42,
     "age_group": "adult",
     "country_id": "US",
+    "country_name": "United States",
     "country_probability": 0.8,
     "created_at": "..."
   }
@@ -139,6 +139,27 @@ Delete a profile by its ID.
 ```bash
 pnpm run docker:stop
 ```
+
+## Prisma Schema Updates
+
+> **⚠️ IMPORTANT:** After **any** change to `prisma/schema.prisma`:
+
+```bash
+# Ensure DB is running
+pnpm run prisma:update
+# or
+# to also re-run seeds if needed
+pnpm run prisma:full
+```
+
+**Skip these steps =** `Cannot find module '.prisma/client'` or missing model fields.
+
+### Common errors prevented
+
+- `Could not resolve @prisma/client`
+- TypeScript missing new model fields
+- Seed script crashes on undefined fields
+- Runtime `PrismaClient` initialization failures
 
 ## Testing
 

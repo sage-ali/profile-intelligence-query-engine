@@ -140,6 +140,27 @@ Delete a profile by its ID.
 pnpm run docker:stop
 ```
 
+## Prisma Schema Updates
+
+> **⚠️ IMPORTANT:** After **any** change to `prisma/schema.prisma`:
+
+```bash
+# Ensure DB is running
+pnpm run prisma:update
+# or
+# to also re-run seeds if needed
+pnpm run prisma:full
+```
+
+**Skip these steps =** `Cannot find module '.prisma/client'` or missing model fields.
+
+### Common errors prevented
+
+- `Could not resolve @prisma/client`
+- TypeScript missing new model fields
+- Seed script crashes on undefined fields
+- Runtime `PrismaClient` initialization failures
+
 ## Testing
 
 ```bash

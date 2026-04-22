@@ -1,11 +1,11 @@
 databases:
-  - name: hng-14-be-stage-1-db
+  - name: intelligence-profile-db
     plan: free
     region: oregon
     ipAllowList: []
 
 services:
-  - name: hng-14-be-stage-1
+  - name: intelligence-profile
     type: web
     runtime: node
     region: oregon
@@ -16,10 +16,10 @@ services:
     healthCheckPath: /health
     envVars:
       - key: PORT
-        value: "3000"
+        value: '3000'
       - key: NODE_VERSION
-        value: "20.x"
+        value: '20.x'
       - key: DATABASE_URL
         fromDatabase:
-          name: hng-14-be-stage-1-db
+          name: intelligence-profile-db
           property: connectionString

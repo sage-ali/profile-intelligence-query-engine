@@ -11,13 +11,8 @@ import { Transform, Type, type TransformFnParams } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 const AGE_GROUPS = ['child', 'teenager', 'adult', 'senior'] as const;
-const SORT_FIELDS = [
-  'created_at',
-  'age',
-  'gender_probability',
-  'country_probability',
-  'name',
-] as const;
+const GENDER = ['male', 'female'] as const;
+const SORT_FIELDS = ['created_at', 'age', 'gender_probability'] as const;
 const SORT_ORDERS = ['asc', 'desc'] as const;
 
 const toLowerTrimmed = (value: unknown): string | undefined => {
@@ -30,7 +25,7 @@ export class GetProfilesQueryDto {
     example: 'male',
   })
   @IsOptional()
-  @IsString()
+  @IsIn(GENDER)
   @Transform(({ value }: TransformFnParams) => toLowerTrimmed(value))
   gender?: string;
 

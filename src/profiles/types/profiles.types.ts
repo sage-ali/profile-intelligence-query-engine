@@ -54,8 +54,6 @@ export interface EnrichedProfile {
   gender: string;
   /** The probability of the gender prediction. */
   probability: number | null;
-  /** The number of samples used for gender prediction. */
-  sample_size: number;
   /** The predicted age. */
   age: number;
   /** The category the predicted age falls into. */
@@ -64,6 +62,8 @@ export interface EnrichedProfile {
   top_nationality: {
     /** The ISO country code. */
     country_id: string;
+    /** The country name. */
+    country_name: string;
     /** The probability of the country prediction. */
     probability: number;
   };

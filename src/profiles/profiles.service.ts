@@ -126,16 +126,20 @@ export class ProfilesService {
     );
 
     const topNationality = sortedCountries[0];
+    const countryName =
+      new Intl.DisplayNames(['en'], { type: 'region' }).of(
+        topNationality.country_id,
+      ) || topNationality.country_id;
 
     return {
       name: genderize.name,
       gender: genderize.gender as string,
       probability: genderize.probability,
-      sample_size: genderize.count,
       age: agify.age as number,
       age_group: this.getAgeGroup(agify.age as number),
       top_nationality: {
         country_id: topNationality.country_id,
+        country_name: countryName,
         probability: topNationality.probability,
       },
       countries: sortedCountries,
@@ -192,10 +196,10 @@ export class ProfilesService {
         name: normalizedName,
         gender: enrichedData.gender,
         gender_probability: enrichedData.probability || 0,
-        sample_size: enrichedData.sample_size,
         age: enrichedData.age,
         age_group: enrichedData.age_group,
         country_id: enrichedData.top_nationality.country_id,
+        country_name: enrichedData.top_nationality.country_name,
         country_probability: enrichedData.top_nationality.probability,
         created_at: new Date(),
       },

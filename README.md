@@ -52,10 +52,10 @@ Create or retrieve an enriched profile.
     "name": "peter",
     "gender": "male",
     "gender_probability": 0.99,
-    "sample_size": 100,
     "age": 42,
     "age_group": "adult",
     "country_id": "US",
+    "country_name": "United States",
     "country_probability": 0.8,
     "created_at": "..."
   }

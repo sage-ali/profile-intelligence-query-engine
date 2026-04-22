@@ -11,4 +11,4 @@ jobs:
       - name: Ping Service
         run: |
           echo "Keep-alive active. Pinging service..."
-          curl -s https://hng-14-be-stage-1.onrender.com/health
+          curl -s https://intelligence-profile-bpjl.onrender.com/health

@@ -176,15 +176,14 @@ export class ProfilesController {
   async findAll(
     @Query() query: GetProfilesQueryDto,
   ): Promise<ProfileListResponseDto> {
-    const { count, data } = await this.profilesService.findAllProfiles({
-      gender: query.gender,
-      country_id: query.country_id,
-      age_group: query.age_group,
-    });
+    const { page, limit, total, data } =
+      await this.profilesService.findAllProfiles(query);
 
     return {
       status: 'success',
-      count,
+      page,
+      limit,
+      total,
       data: data.map((profile) => ({
         id: profile.id,
         name: profile.name,

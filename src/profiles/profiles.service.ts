@@ -14,6 +14,8 @@ import {
   NationalizeResponse,
   EnrichedProfile,
 } from './types/profiles.types';
+import { buildProfileQuery } from './utils/build-profile-query';
+import { GetProfilesQueryDto } from './dto/get-profiles-query.dto';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { uuidv7 } from 'uuidv7';
 import { Prisma } from '@prisma/client';
@@ -229,34 +231,26 @@ export class ProfilesService {
    * @param filters - An object containing optional filters for gender, country_id, and age_group.
    * @returns A promise that resolves to an object containing the total count and the list of profiles.
    */
-  async findAllProfiles(filters: {
-    gender?: string;
-    country_id?: string;
-    age_group?: string;
-  }) {
-    const where: Prisma.ProfileWhereInput = {};
+  async findAllProfiles(query: GetProfilesQueryDto) {
+    const { where, orderBy, skip, take, page, limit } =
+      buildProfileQuery(query);
 
-    if (filters.gender) {
-      where.gender = filters.gender.toLowerCase();
-    }
-
-    if (filters.country_id) {
-      where.country_id = filters.country_id.toUpperCase();
-    }
-
-    if (filters.age_group) {
-      where.age_group = filters.age_group.toLowerCase();
-    }
-
-    const [count, data] = await Promise.all([
+    const [total, data] = await Promise.all([
       this.prisma.profile.count({ where }),
       this.prisma.profile.findMany({
         where,
-        orderBy: { created_at: 'desc' },
+        orderBy,
+        skip,
+        take,
       }),
     ]);
 
-    return { count, data };
+    return {
+      page,
+      limit,
+      total,
+      data,
+    };
   }
 
   /**

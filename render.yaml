@@ -9,7 +9,8 @@ services:
     type: web
     runtime: node
     region: oregon
-    buildCommand: pnpm install && pnpm build
+    buildCommand: pnpm install && pnpm run prisma:generate && pnpm build
+    preDeployCommand: pnpm run db:push && pnpm run db:seed
     startCommand: node dist/src/main.js
     plan: free
     autoDeploy: true

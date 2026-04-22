@@ -20,7 +20,9 @@ import {
   ProfileSuccessWithMessageResponseDto,
   ProfileListResponseDto,
 } from './dto/profile-response.dto';
+import { SearchProfilesQueryDto } from './dto/search-query.dto';
 import { NlqService } from './utils/nlq-service';
+import { BadRequestException } from '@nestjs/common';
 
 /**
  * Controller for managing user profiles.
@@ -129,9 +131,24 @@ export class ProfilesController {
     description: 'Profiles retrieved successfully',
     type: ProfileListResponseDto,
   })
-  async search(@Query('q') q: string): Promise<ProfileListResponseDto> {
-    const parsed = this.nlqService.parse(q);
-    console.log(parsed);
+  async search(
+    @Query() query: SearchProfilesQueryDto,
+  ): Promise<ProfileListResponseDto> {
+    if (!query.q) {
+      throw new BadRequestException({
+        status: 'error',
+        message: 'Invalid query parameters',
+      });
+    }
+
+    const parsed = this.nlqService.parse(query.q);
+
+    if (Object.keys(parsed).length === 0) {
+      throw new BadRequestException({
+        status: 'error',
+        message: 'Unable to interpret query',
+      });
+    }
     const { page, limit, total, data } =
       await this.profilesService.findAllProfiles(parsed);
 

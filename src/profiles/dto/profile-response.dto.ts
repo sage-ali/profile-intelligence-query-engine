@@ -116,10 +116,22 @@ export class ProfileListResponseDto {
   status!: string;
 
   /**
+   * Current page number
+   */
+  @ApiProperty({ example: 1 })
+  page!: number;
+
+  /**
+   * maximum number of items requested/returned per page.
+   */
+  @ApiProperty({ example: 10 })
+  limit!: number;
+
+  /**
    * Total number of profiles returned.
    */
-  @ApiProperty({ example: 2 })
-  count!: number;
+  @ApiProperty({ example: 2026 })
+  total!: number;
 
   /**
    * Array of profile data.

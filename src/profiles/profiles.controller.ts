@@ -20,6 +20,9 @@ import {
   ProfileSuccessWithMessageResponseDto,
   ProfileListResponseDto,
 } from './dto/profile-response.dto';
+import { SearchProfilesQueryDto } from './dto/search-query.dto';
+import { NlqService } from './utils/nlq-service';
+import { BadRequestException } from '@nestjs/common';
 
 /**
  * Controller for managing user profiles.
@@ -28,7 +31,10 @@ import {
 @ApiTags('profiles')
 @Controller('profiles')
 export class ProfilesController {
-  constructor(private readonly profilesService: ProfilesService) {}
+  constructor(
+    private readonly profilesService: ProfilesService,
+    private readonly nlqService: NlqService,
+  ) {}
 
   /**
    * Creates a new profile or retrieves an existing one.
@@ -114,6 +120,51 @@ export class ProfilesController {
     }
   }
 
+  @Get('search')
+  @ApiOperation({
+    summary: 'Get all profiles with natural language filtering',
+    description:
+      'Retrieves all profiles with matching the natural language query.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Profiles retrieved successfully',
+    type: ProfileListResponseDto,
+  })
+  async search(
+    @Query() query: SearchProfilesQueryDto,
+  ): Promise<ProfileListResponseDto> {
+    const parsed = this.nlqService.parse(query.q);
+
+    if (Object.keys(parsed).length === 0) {
+      throw new BadRequestException({
+        status: 'error',
+        message: 'Unable to interpret query',
+      });
+    }
+    const { page, limit, total, data } =
+      await this.profilesService.findAllProfiles(parsed);
+
+    return {
+      status: 'success',
+      page,
+      limit,
+      total,
+      data: data.map((profile) => ({
+        id: profile.id,
+        name: profile.name,
+        gender: profile.gender,
+        gender_probability: profile.gender_probability,
+        age: profile.age,
+        age_group: profile.age_group,
+        country_id: profile.country_id,
+        country_name: profile.country_name,
+        country_probability: profile.country_probability,
+        created_at: profile.created_at,
+      })),
+    };
+  }
+
   /**
    * Retrieves a profile by its ID.
    *
@@ -176,15 +227,14 @@ export class ProfilesController {
   async findAll(
     @Query() query: GetProfilesQueryDto,
   ): Promise<ProfileListResponseDto> {
-    const { count, data } = await this.profilesService.findAllProfiles({
-      gender: query.gender,
-      country_id: query.country_id,
-      age_group: query.age_group,
-    });
+    const { page, limit, total, data } =
+      await this.profilesService.findAllProfiles(query);
 
     return {
       status: 'success',
-      count,
+      page,
+      limit,
+      total,
       data: data.map((profile) => ({
         id: profile.id,
         name: profile.name,

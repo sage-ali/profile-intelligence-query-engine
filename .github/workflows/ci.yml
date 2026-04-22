@@ -60,7 +60,16 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # Validate render.yaml blueprint syntax
-      - name: Validate Render Blueprint
-        uses: renderinc/action-blueprint-validate@v1
-        # Or install Render CLI and run: render blueprints validate render.yaml
+  # Validate render.yaml blueprint syntax
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Render CLI
+        run: curl -fsSL https://raw.githubusercontent.com/render-oss/cli/refs/heads/main/bin/install.sh | sh
+
+      - name: Validate render.yaml
+        run: render blueprints validate render.yaml
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}

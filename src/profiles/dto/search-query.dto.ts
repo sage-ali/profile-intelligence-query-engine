@@ -14,5 +14,5 @@ export class SearchProfilesQueryDto {
   @IsString()
   @IsNotEmpty()
   @Transform(({ value }: TransformFnParams) => toLowerTrimmed(value))
-  q?: string;
+  q!: string;
 }

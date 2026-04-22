@@ -134,13 +134,6 @@ export class ProfilesController {
   async search(
     @Query() query: SearchProfilesQueryDto,
   ): Promise<ProfileListResponseDto> {
-    if (!query.q) {
-      throw new BadRequestException({
-        status: 'error',
-        message: 'Invalid query parameters',
-      });
-    }
-
     const parsed = this.nlqService.parse(query.q);
 
     if (Object.keys(parsed).length === 0) {

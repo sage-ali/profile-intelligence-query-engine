@@ -3,9 +3,11 @@ name: CI - Test Render Deploy
 on:
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   test-render-deploy:
+    name: Test build, db push, and seed
     runs-on: ubuntu-latest
 
     services:
@@ -17,59 +19,64 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres -d test"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+      NODE_ENV: test
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: pnpm
 
-      # Test the EXACT Render deploy sequence
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma Client
         run: pnpm run prisma:generate
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
 
-      - name: Build
+      - name: Build app
         run: pnpm build
 
-      - name: Test Prisma DB Push & Seed
-        run: |
-          pnpm run db:push
-          pnpm run db:seed
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+      - name: Push schema to test database
+        run: pnpm run db:push
+
+      - name: Seed test database
+        run: pnpm run db:seed
 
       - name: Lint
         run: pnpm lint
 
-      - name: Test
+      - name: Run tests
         run: pnpm test
 
-  # Validate render.yaml blueprint syntax
-  validate:
+  validate-render-blueprint:
+    name: Validate render.yaml
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Install Render CLI
         run: curl -fsSL https://raw.githubusercontent.com/render-oss/cli/refs/heads/main/bin/install.sh | sh
 
+      - name: Add Render CLI to PATH
+        run: echo "$HOME/.render/bin" >> $GITHUB_PATH
+
       - name: Validate render.yaml
-        run: render blueprints validate render.yaml
+        run: render blueprints validate render.yaml --workspace "${{ secrets.RENDER_WORKSPACE_ID }}"
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}

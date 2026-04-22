@@ -13,14 +13,14 @@ datasource db {
 }
 
 model Profile {
-  id                  String   @id // We will generate UUID v7 in Node
-  name                String   @unique // Crucial for Idempotency
-  gender              String
+  id                  String   @id @db.Uuid
+  name                String   @unique @db.VarChar(255)
+  gender              String   @db.VarChar(10)
   gender_probability  Float
-  sample_size         Int
   age                 Int
-  age_group           String
-  country_id          String
+  age_group           String   @db.VarChar(20)
+  country_id          String   @db.VarChar(2)
+  country_name        String   @db.VarChar(255)
   country_probability Float
   created_at          DateTime @default(now())
 

@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { uuidv7 } from 'uuidv7';
 import 'dotenv/config';
 
 const dbUrl = process.env.DATABASE_URL;
@@ -33,9 +34,10 @@ async function main() {
   const { profiles } = JSON.parse(raw) as { profiles: SeedProfile[] };
 
   for (const profile of profiles) {
-    const id = profile.id || crypto.randomUUID();
+    const normalizedName = profile.name.toLowerCase().trim();
+    const id = profile.id || uuidv7();
     await prisma.profile.upsert({
-      where: { name: profile.name },
+      where: { name: normalizedName },
       update: {
         gender: profile.gender,
         gender_probability: profile.gender_probability,
@@ -47,7 +49,7 @@ async function main() {
       },
       create: {
         id,
-        name: profile.name,
+        name: normalizedName,
         gender: profile.gender,
         gender_probability: profile.gender_probability,
         age: profile.age,

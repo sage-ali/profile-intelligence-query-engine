@@ -6,7 +6,9 @@ A NestJS-based REST API that predicts and stores profile data (gender, age, and 
 
 - **Profile Enrichment**: Automatically fetches and stores gender, age, and nationality data for any given name.
 - **Idempotency**: Seamlessly handles duplicate requests by returning existing profiles.
-- **Filtering**: Search stored profiles by gender, country, or age group.
+- **Advanced Filtering**: Search stored profiles by gender, country, age group, age ranges, and probability thresholds.
+- **Natural Language Query**: Interpret plain English queries and convert them into database filters.
+- **Sorting & Pagination**: Flexible result ordering with configurable pagination (max 50 items per page).
 - **Global Error Handling**: Standardized error responses following a strict format.
 - **Persistence**: Managed PostgreSQL database with Prisma ORM.
 - **API Documentation**: Integrated Swagger/OpenAPI UI.
@@ -68,8 +70,86 @@ Retrieve a profile by its ID.
 
 #### `GET /api/profiles`
 
-List all profiles with optional filters.
-**Query Params:** `gender`, `country_id`, `age_group`
+List all profiles with optional filters, sorting, and pagination.
+
+**Query Parameters:**
+
+- **Filters:** `gender`, `country_id`, `age_group`, `min_age`, `max_age`, `min_gender_probability`, `min_country_probability`
+- **Sorting:** `sort_by` (age | created_at | gender_probability), `order` (asc | desc)
+- **Pagination:** `page` (default: 1), `limit` (default: 10, max: 50)
+
+**Example:**
+
+```
+GET /api/profiles?gender=male&country_id=NG&min_age=25&sort_by=age&order=desc&page=1&limit=20
+```
+
+**Response:**
+
+```json
+{
+  "status": "success",
+  "page": 1,
+  "limit": 20,
+  "total": 2026,
+  "data": [...]
+}
+```
+
+#### `GET /api/profiles/search`
+
+Search profiles using natural language queries.
+
+**Query Parameters:**
+
+- `q` (required): Natural language search query
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 10, max: 50)
+
+**Example:**
+
+```
+GET /api/profiles/search?q=young males from nigeria&page=1&limit=10
+```
+
+**Response:** Same format as `GET /api/profiles`
+
+##### Natural Language Query Engine
+
+The search endpoint uses **rule-based parsing** (no AI/LLMs) to interpret plain English queries and convert them into structured database filters.
+
+**Supported Query Patterns:**
+
+| Query Pattern | Interpretation |
+|--------------|----------------|
+| `"young males"` | `gender=male`, `min_age=16`, `max_age=24` |
+| `"females above 30"` | `gender=female`, `min_age=30` |
+| `"people from angola"` | `country_id=AO` |
+| `"adult males from kenya"` | `gender=male`, `age_group=adult`, `country_id=KE` |
+| `"male and female teenagers above 17"` | `age_group=teenager`, `min_age=17` |
+| `"women under 25 from canada"` | `gender=female`, `max_age=25`, `country_id=CA` |
+
+**Parsing Rules:**
+
+- **Gender:** Extracts "male/males/man/men" or "female/females/woman/women" (both = no filter)
+- **Age Groups:** Recognizes "child", "teenager", "adult", "senior"
+- **Age Ranges:**
+  - "young" → ages 16-24
+  - "above/over/older than [N]" → `min_age=N`
+  - "under/below/younger than [N]" → `max_age=N`
+- **Countries:** Matches country names, ISO codes, and common aliases (e.g., "USA", "Nigeria", "UK")
+- **Sorting:** Detects sort keywords and field names (e.g., "sorted by age descending")
+
+**Error Handling:**
+
+If the query cannot be interpreted, the API returns:
+
+```json
+{
+  "status": "error",
+  "message": "Unable to interpret query"
+}
+```
 
 #### `DELETE /api/profiles/:id`
 
@@ -160,6 +240,16 @@ pnpm run prisma:full
 - TypeScript missing new model fields
 - Seed script crashes on undefined fields
 - Runtime `PrismaClient` initialization failures
+
+## Data Seeding
+
+The project includes a seed script to populate the database with 2026 sample profiles.
+
+```bash
+pnpm run db:seed
+```
+
+**Note:** Re-running the seed command will not create duplicates. The script uses `upsert` operations based on normalized (lowercase) names to ensure idempotency.
 
 ## Testing
 

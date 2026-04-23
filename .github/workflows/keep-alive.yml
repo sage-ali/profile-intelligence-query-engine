@@ -1,7 +1,8 @@
 name: Keep Alive Render
+
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,3 +13,5 @@ jobs:
         run: |
           echo "Keep-alive active. Pinging service..."
           curl -s https://intelligence-profile-bpjl.onrender.com/health
+          sleep $(( RANDOM % 51 + 10 ))
+          curl -s https://intelligence-profile-bpjl.onrender.com/

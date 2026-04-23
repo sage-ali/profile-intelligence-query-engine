@@ -1,6 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe, BadRequestException } from '@nestjs/common';
+import {
+  ValidationPipe,
+  BadRequestException,
+  UnprocessableEntityException,
+  ValidationError,
+} from '@nestjs/common';
 import { HttpExceptionFilter } from './filters/http-exception.filter';
 import { Logger } from 'nestjs-pino';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -33,11 +38,39 @@ async function bootstrap() {
       transform: true,
       whitelist: true,
       forbidNonWhitelisted: true,
-      exceptionFactory: () =>
-        new BadRequestException({
+      exceptionFactory: (errors: ValidationError[]) => {
+        // Check if any error is a type validation error (422) vs empty/missing (400)
+        const hasTypeError = errors.some((error) => {
+          if (!error.constraints) return false;
+          const constraintKeys = Object.keys(error.constraints);
+          // Type-related constraints get 422
+          return constraintKeys.some((key) =>
+            [
+              'isInt',
+              'isNumber',
+              'isString',
+              'isIn',
+              'min',
+              'max',
+              'isBoolean',
+              'isArray',
+              'isDate',
+            ].includes(key),
+          );
+        });
+
+        if (hasTypeError) {
+          return new UnprocessableEntityException({
+            status: 'error',
+            message: 'Invalid query parameters',
+          });
+        }
+
+        return new BadRequestException({
           status: 'error',
           message: 'Invalid query parameters',
-        }),
+        });
+      },
     }),
   );
 

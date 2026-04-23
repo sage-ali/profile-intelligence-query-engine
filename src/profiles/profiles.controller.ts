@@ -143,7 +143,11 @@ export class ProfilesController {
       });
     }
     const { page, limit, total, data } =
-      await this.profilesService.findAllProfiles(parsed);
+      await this.profilesService.findAllProfiles({
+        ...parsed,
+        page: query.page,
+        limit: query.limit,
+      });
 
     return {
       status: 'success',

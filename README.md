@@ -260,6 +260,8 @@ pnpm run test:e2e    # E2E tests
 
 ## Deployment
 
+This project supports deployment to both **Render** and **Railway** using infrastructure-as-code configuration files.
+
 ### Render Deployment
 
 This project is configured for seamless deployment to [Render](https://render.com) using the provided `render.yaml` blueprint.
@@ -276,6 +278,120 @@ This project is configured for seamless deployment to [Render](https://render.co
 
 - `PROXY_URL`: Proxy URL for upstream API requests (required if using a proxy).
 - `DATABASE_URL`: Automatically linked from the managed database.
+
+### Railway Deployment
+
+This project deploys to [Railway](https://railway.app) using **Docker**. Railway automatically detects the `Dockerfile` and builds a containerized version of your application.
+
+**Deployment Method:**
+
+- **Builder:** Docker (configured in `railway.toml`)
+- **Node Version:** 22.12.0 (specified in `Dockerfile`)
+- **Database:** PostgreSQL service with automatic migrations and seeding via `docker-entrypoint.sh`
+
+**Deployment Steps:**
+
+#### Via Railway Dashboard (Recommended)
+
+1. **Connect GitHub Repository:**
+   - Go to [Railway Dashboard](https://railway.app/dashboard)
+   - Click **New Project** → **Deploy from GitHub repo**
+   - Select your repository
+   - Railway will automatically detect the `Dockerfile`
+
+2. **Add PostgreSQL Database:**
+   - In your project, click **+ New**
+   - Select **Database** → **PostgreSQL**
+   - Wait for it to deploy (shows green checkmark)
+
+3. **Configure Environment Variables:**
+   - Click your **app service** (not the database)
+   - Go to **Variables** tab
+   - Add these variables:
+
+   **Using Reference Variable (Recommended):**
+   - Click **New Variable** → **Add Reference**
+   - Variable: `DATABASE_URL`
+   - Service: Select your Postgres service
+   - Variable: `DATABASE_URL`
+   - Result: `${{Postgres.DATABASE_URL}}`
+
+   **Additional Variables:**
+
+   ```
+   PROXY_URL=http://fixie:n5mtYhd3N0SHZqO@ventoux.usefixie.com:80
+   NODE_ENV=production
+   LOG_LEVEL=info
+   ```
+
+4. **Generate Public Domain:**
+   - In your app service, go to **Settings** → **Networking**
+   - Click **Generate Domain**
+   - Railway will provide a URL (e.g., `intelligence-profile-production.up.railway.app`)
+
+5. **Monitor Deployment:**
+   - Go to **Deployments** tab
+   - Click on the active deployment to view logs
+
+#### Via Railway CLI (Alternative)
+
+```bash
+# Install Railway CLI
+npm i -g @railway/cli
+
+# Login and initialize
+railway login
+railway init
+
+# Add PostgreSQL database
+railway add -d postgres
+
+# Deploy
+railway up
+
+# Generate domain
+railway domain
+```
+
+**What Happens on Deploy:**
+
+Railway uses the `Dockerfile` to:
+
+1. **Build Stage:**
+   - Use Node.js 22.12.0-slim base image
+   - Install OpenSSL and Prisma dependencies
+   - Install pnpm via corepack
+   - Install Node dependencies with `pnpm i --frozen-lockfile`
+   - Generate Prisma client with `pnpm prisma generate`
+   - Build the NestJS application with `pnpm build`
+
+2. **Runtime (via docker-entrypoint.sh):**
+   - Validate `DATABASE_URL` is set
+   - Run database migrations with `pnpm prisma db push`
+   - Seed the database with sample data
+   - Start the application on Railway-provided `PORT`
+   - Health checks performed on `/health` endpoint
+
+**Subsequent Deploys:**
+
+Once your GitHub repository is connected, Railway automatically deploys on every `git push` to your main branch.
+
+**Required Environment Variables:**
+
+| Variable | Description | How to Set |
+|----------|-------------|-----------|
+| `DATABASE_URL` | PostgreSQL connection string | Use reference: `${{Postgres.DATABASE_URL}}` |
+| `PROXY_URL` | Proxy for external API requests | Set manually in Variables tab |
+| `NODE_ENV` | Environment mode | Set to `production` |
+| `LOG_LEVEL` | Logging verbosity | Set to `info` |
+| `PORT` | Application port | **Auto-provided by Railway** |
+
+**Files Used for Deployment:**
+
+- `Dockerfile` - Defines the Docker build process
+- `docker-entrypoint.sh` - Handles migrations and seeding on startup
+- `railway.toml` - Configures Railway to use Docker builder
+- `prisma/schema.prisma` - Database schema definition
 
 ## License
 

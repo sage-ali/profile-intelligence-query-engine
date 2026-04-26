@@ -28,10 +28,23 @@ type SeedProfile = {
   created_at?: string;
 };
 
+type SeedAdmin = {
+  githubId: string;
+  name: string;
+  email: string;
+  role: 'ADMIN' | 'ANALYST';
+};
+
 async function main() {
-  const filePath = path.join(process.cwd(), 'prisma', 'seed_profiles.json');
-  const raw = await readFile(filePath, 'utf-8');
-  const { profiles } = JSON.parse(raw) as { profiles: SeedProfile[] };
+  // Seed Profiles
+  const profilePath = path.join(process.cwd(), 'prisma', 'seed_profiles.json');
+  const profileRaw = await readFile(profilePath, 'utf-8');
+  const { profiles } = JSON.parse(profileRaw) as { profiles: SeedProfile[] };
+
+  // Seed Admin User
+  const adminPath = path.join(process.cwd(), 'prisma', 'admin_seed.json');
+  const adminRaw = await readFile(adminPath, 'utf-8');
+  const adminData = JSON.parse(adminRaw) as SeedAdmin;
 
   for (const profile of profiles) {
     const normalizedName = profile.name.toLowerCase().trim();
@@ -63,6 +76,23 @@ async function main() {
       },
     });
   }
+
+  // Seed the admin user
+  await prisma.user.upsert({
+    where: { githubId: adminData.githubId },
+    update: {
+      name: adminData.name,
+      email: adminData.email,
+      role: adminData.role,
+    },
+    create: {
+      id: uuidv7(),
+      githubId: adminData.githubId,
+      name: adminData.name.toLowerCase().trim(),
+      email: adminData.email,
+      role: adminData.role,
+    },
+  });
 }
 
 main()

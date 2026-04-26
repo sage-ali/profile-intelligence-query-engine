@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ClassificationModule } from './classification/classification.module';
-import { PrismaModule } from './prisma/prisma.module';
-import { ProfilesModule } from './profiles/profiles.module';
+import { ClassificationModule } from '@modules/classification/classification.module';
+import { PrismaModule } from '@infrastructure/database/prisma/prisma.module';
+import { ProfilesModule } from '@modules/profiles/profiles.module';
 
 @Module({
   imports: [

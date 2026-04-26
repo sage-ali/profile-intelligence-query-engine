@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
-import { ExternalApiError } from '../errors/ExternalApiError';
-import { NoPredictionError } from '../errors/NoPredictionError';
+import { ExternalApiError } from '@core/errors/ExternalApiError';
+import { NoPredictionError } from '@core/errors/NoPredictionError';
 import {
   GenderizeResponse,
   TransformedGenderizeResponse,

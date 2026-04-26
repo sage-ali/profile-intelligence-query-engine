@@ -1,5 +1,5 @@
-import { ExternalApiError } from '../errors/ExternalApiError';
-import { NoPredictionError } from '../errors/NoPredictionError';
+import { ExternalApiError } from '@core/errors/ExternalApiError';
+import { NoPredictionError } from '@core/errors/NoPredictionError';
 
 interface GenderizeResponse {
   count: number;

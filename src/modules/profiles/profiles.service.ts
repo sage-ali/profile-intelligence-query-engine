@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import {
   GenderizeResponse,
   AgifyResponse,

@@ -1,7 +1,7 @@
 import { Controller, Get, Query, UseFilters } from '@nestjs/common';
 import { ClassificationService } from './classification.service';
 import { ClassificationQueryDto } from './dto/classification-query.dto';
-import { HttpExceptionFilter } from '../filters/http-exception.filter';
+import { HttpExceptionFilter } from '@core/filters/http-exception.filter';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 
 /**

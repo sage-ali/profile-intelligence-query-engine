@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  HttpException,
-  HttpStatus,
-  NotFoundException,
-  Inject,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
@@ -20,6 +14,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import { uuidv7 } from 'uuidv7';
 import { Prisma } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
+import { ExternalApiError } from '@core/errors/ExternalApiError';
 
 // Check it here, outside the class
 const PROXY_URL = process.env.PROXY_URL;
@@ -60,35 +55,52 @@ export class ProfilesService {
         this.fetchWithProxy<NationalizeResponse>(urls.nationalize),
       ]);
 
+      if (!genderizeRes || !agifyRes || !nationalizeRes) {
+        throw new ExternalApiError('Profile enrichment failed', 502);
+      }
+
       this.validateResponses(genderizeRes, agifyRes, nationalizeRes);
 
       return this.transformData(genderizeRes, agifyRes, nationalizeRes);
     } catch (error) {
-      if (error instanceof HttpException) {
+      if (error instanceof ExternalApiError) {
         throw error;
       }
       this.logger.error(
         { err: error instanceof Error ? error : String(error) },
         'Upstream dependency failure during profile enrichment',
       );
-      throw new HttpException(
-        'Upstream dependency failure',
-        HttpStatus.BAD_GATEWAY,
-      );
+      throw new ExternalApiError('Upstream dependency failure', 502);
     }
   }
 
   private readonly GENDERIZE_API_TIMEOUT_MS = 5000;
 
-  private async fetchWithProxy<T>(url: string): Promise<T> {
-    const response = await firstValueFrom(
-      this.httpService.get<T>(url, {
-        httpsAgent: this.proxyAgent,
-        proxy: false,
-        timeout: this.GENDERIZE_API_TIMEOUT_MS,
-      }),
-    );
-    return response.data;
+  private async fetchWithProxy<T>(url: string): Promise<T | undefined> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<T>(url, {
+          httpsAgent: this.proxyAgent,
+          proxy: false,
+          timeout: this.GENDERIZE_API_TIMEOUT_MS,
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      if (error) {
+        const serviceName = url.includes('genderize')
+          ? 'Genderize'
+          : url.includes('agify')
+            ? 'Agify'
+            : 'Nationalize';
+
+        throw new ExternalApiError(
+          `Failed to fetch from ${serviceName}`,
+          502,
+          serviceName,
+        );
+      }
+    }
   }
 
   private validateResponses(
@@ -97,23 +109,26 @@ export class ProfilesService {
     nationalize: NationalizeResponse,
   ): void {
     if (genderize.gender === null || genderize.count === 0) {
-      throw new HttpException(
+      throw new ExternalApiError(
         'Genderize returned an invalid response',
-        HttpStatus.BAD_GATEWAY,
+        502,
+        'Genderize',
       );
     }
 
     if (agify.age === null) {
-      throw new HttpException(
+      throw new ExternalApiError(
         'Agify returned an invalid response',
-        HttpStatus.BAD_GATEWAY,
+        502,
+        'Agify',
       );
     }
 
     if (!nationalize.country || nationalize.country.length === 0) {
-      throw new HttpException(
+      throw new ExternalApiError(
         'Nationalize returned an invalid response',
-        HttpStatus.BAD_GATEWAY,
+        502,
+        'Nationalize',
       );
     }
   }
@@ -182,10 +197,7 @@ export class ProfilesService {
     const enrichedData = await this.enrichProfile(normalizedName);
 
     if (!enrichedData) {
-      throw new HttpException(
-        'Failed to enrich profile data',
-        HttpStatus.BAD_GATEWAY,
-      );
+      throw new ExternalApiError('Failed to enrich profile data', 502);
     }
 
     // Generate UUID v7

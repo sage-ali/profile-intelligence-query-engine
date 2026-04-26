@@ -8,17 +8,21 @@ export class ExternalApiError extends Error {
   public status: number;
 
   /**
+   * The name of the external service that failed.
+   */
+  public serviceName?: string;
+
+  /**
    * Creates a new instance of ExternalApiError.
    *
    * @param message - The error message.
    * @param status - The HTTP status code (defaults to 502).
+   * @param serviceName - Optional name of the external service.
    */
-  constructor(message: string, status: number = 502) {
+  constructor(message: string, status: number = 502, serviceName?: string) {
     super(message);
     this.name = 'ExternalApiError';
     this.status = status;
-
-    // Restore prototype chain
-    Object.setPrototypeOf(this, ExternalApiError.prototype);
+    this.serviceName = serviceName;
   }
 }

@@ -56,45 +56,31 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof Error) {
       message = exception.message;
       // Handle custom error classes with status property
-      const err = exception as Error & { status?: number };
+      const err = exception as Error & {
+        status?: number;
+        serviceName?: string;
+      };
       if (typeof err.status === 'number') {
         status = err.status;
       }
 
-      if (message === 'Profile not found') {
-        status = HttpStatus.NOT_FOUND;
-      }
-    }
+      // Use the service name for more context if available
+      const serviceName = err.serviceName;
 
-    // Map certain messages to specific status codes as per requirements
-    if (message === 'Missing or empty name') {
-      status = HttpStatus.BAD_REQUEST;
-    } else if (
-      message === 'Invalid type' ||
-      message === 'name must be a string'
-    ) {
-      status = HttpStatus.UNPROCESSABLE_ENTITY;
-    } else if (
-      message === 'Upstream or server failure' ||
-      message.includes('returned an invalid response')
-    ) {
-      if (status === HttpStatus.INTERNAL_SERVER_ERROR) {
-        status = HttpStatus.BAD_GATEWAY;
-      }
+      // Use Pino logger instead of console.error
+      this.logger.error(
+        {
+          method: request.method,
+          url: request.url,
+          status,
+          message,
+          serviceName,
+          exception:
+            exception instanceof Error ? exception.message : String(exception),
+        },
+        'Unhandled exception occurred',
+      );
     }
-
-    // Use Pino logger instead of console.error
-    this.logger.error(
-      {
-        method: request.method,
-        url: request.url,
-        status,
-        message,
-        exception:
-          exception instanceof Error ? exception.message : String(exception),
-      },
-      'Unhandled exception occurred',
-    );
 
     response.status(status).json({
       status: 'error',

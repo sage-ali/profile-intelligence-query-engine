@@ -94,7 +94,11 @@ export class ClassificationService {
         }
       }
 
-      throw new ExternalApiError('Upstream or server failure', 502, 'Genderize');
+      throw new ExternalApiError(
+        'Upstream or server failure',
+        502,
+        'Genderize',
+      );
     }
   }
 }

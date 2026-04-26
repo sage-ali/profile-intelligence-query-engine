@@ -3,7 +3,6 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
 import { ExternalApiError } from '@core/errors/ExternalApiError';
-import { NoPredictionError } from '@core/errors/NoPredictionError';
 import {
   GenderizeResponse,
   TransformedGenderizeResponse,
@@ -43,6 +42,7 @@ export class ClassificationService {
         throw new ExternalApiError(
           'Genderize returned an invalid response',
           502,
+          'Genderize',
         );
       }
 
@@ -63,10 +63,7 @@ export class ClassificationService {
         processed_at: processed_at,
       };
     } catch (error: unknown) {
-      if (
-        error instanceof NoPredictionError ||
-        error instanceof ExternalApiError
-      ) {
+      if (error instanceof ExternalApiError) {
         throw error;
       }
 
@@ -75,20 +72,33 @@ export class ClassificationService {
           error.code === 'ECONNABORTED' ||
           error.message?.includes('timeout')
         ) {
-          throw new ExternalApiError('Upstream or server failure', 504);
+          throw new ExternalApiError(
+            'Upstream or server failure',
+            504,
+            'Genderize',
+          );
         }
 
         if (error.response) {
           throw new ExternalApiError(
             'Genderize returned an invalid response',
             502,
+            'Genderize',
           );
         } else if (error.request) {
-          throw new ExternalApiError('Upstream or server failure', 502);
+          throw new ExternalApiError(
+            'Upstream or server failure',
+            502,
+            'Genderize',
+          );
         }
       }
 
-      throw new ExternalApiError('Upstream or server failure', 502);
+      throw new ExternalApiError(
+        'Upstream or server failure',
+        502,
+        'Genderize',
+      );
     }
   }
 }

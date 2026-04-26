@@ -10,6 +10,7 @@ import { HttpExceptionFilter } from '@core/filters/http-exception.filter';
 import { Logger } from 'nestjs-pino';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as dotenv from 'dotenv';
+import { ApiVersionGuard } from '@core/guards/api-version.guard';
 
 dotenv.config();
 
@@ -31,6 +32,9 @@ async function bootstrap() {
   app.enableCors({
     origin: '*',
   });
+
+  // Check if the right version accessed
+  app.useGlobalGuards(new ApiVersionGuard());
 
   // Enable global validation
   app.useGlobalPipes(

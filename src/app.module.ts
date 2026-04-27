@@ -1,10 +1,13 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClassificationModule } from '@modules/classification/classification.module';
 import { PrismaModule } from '@infrastructure/database/prisma/prisma.module';
 import { ProfilesModule } from '@modules/profiles/profiles.module';
+import { LoggingInterceptor } from '@core/interceptors/logging.interceptor';
+import { HttpExceptionFilter } from '@core/filters/http-exception.filter';
 
 @Module({
   imports: [
@@ -20,6 +23,12 @@ import { ProfilesModule } from '@modules/profiles/profiles.module';
               }
             : undefined,
         level: process.env.LOG_LEVEL || 'info',
+        autoLogging: false,
+        // Disable default serializers to remove redundant 'req' and 'res' blocks
+        serializers: {
+          req: () => undefined,
+          res: () => undefined,
+        },
       },
     }),
     PrismaModule,
@@ -27,12 +36,16 @@ import { ProfilesModule } from '@modules/profiles/profiles.module';
     ProfilesModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
+    },
+  ],
 })
-/**
- * The root module of the application.
- *
- * This module is responsible for importing all other modules,
- * setting up logging, and configuring global providers.
- */
 export class AppModule {}

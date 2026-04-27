@@ -6,7 +6,6 @@ import {
   UnprocessableEntityException,
   ValidationError,
 } from '@nestjs/common';
-import { HttpExceptionFilter } from '@core/filters/http-exception.filter';
 import { Logger } from 'nestjs-pino';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as dotenv from 'dotenv';
@@ -77,10 +76,6 @@ async function bootstrap() {
       },
     }),
   );
-
-  // Enable global exception filter
-  const logger = app.get(Logger);
-  app.useGlobalFilters(new HttpExceptionFilter(logger));
 
   // Set global prefix for all routes
   app.setGlobalPrefix('api', {

@@ -51,4 +51,25 @@ export class AuthRepository {
       data: { revokedAt: new Date() },
     });
   }
+
+  async touchSession(id: string): Promise<AuthSession> {
+    return this.prisma.authSession.update({
+      where: { id },
+      data: {
+        lastUsedAt: new Date(),
+      },
+    });
+  }
+
+  async setReplacementTokenHash(
+    id: string,
+    replacedByTokenHash: string,
+  ): Promise<AuthSession> {
+    return this.prisma.authSession.update({
+      where: { id },
+      data: {
+        replacedByTokenHash,
+      },
+    });
+  }
 }

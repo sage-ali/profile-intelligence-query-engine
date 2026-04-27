@@ -1,13 +1,20 @@
 import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
+import { APP_INTERCEPTOR, APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import { Redis } from 'ioredis';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClassificationModule } from '@modules/classification/classification.module';
 import { PrismaModule } from '@infrastructure/database/prisma/prisma.module';
 import { ProfilesModule } from '@modules/profiles/profiles.module';
+import { RedisModule } from '@infrastructure/redis/redis.module';
+import { REDIS_CLIENT } from '@infrastructure/redis/redis.constants';
 import { LoggingInterceptor } from '@core/interceptors/logging.interceptor';
 import { HttpExceptionFilter } from '@core/filters/http-exception.filter';
+import { ApiVersionGuard } from '@core/guards/api-version.guard';
+import { RedisThrottlerGuard } from '@core/guards/redis-throttler-guard.guard';
 
 @Module({
   imports: [
@@ -24,12 +31,31 @@ import { HttpExceptionFilter } from '@core/filters/http-exception.filter';
             : undefined,
         level: process.env.LOG_LEVEL || 'info',
         autoLogging: false,
-        // Disable default serializers to remove redundant 'req' and 'res' blocks
         serializers: {
           req: () => undefined,
           res: () => undefined,
         },
       },
+    }),
+    RedisModule,
+    ThrottlerModule.forRootAsync({
+      imports: [RedisModule],
+      inject: [REDIS_CLIENT],
+      useFactory: (redis: Redis) => ({
+        throttlers: [
+          {
+            name: 'auth',
+            ttl: 60000, // 1 minute
+            limit: 10,
+          },
+          {
+            name: 'api',
+            ttl: 60000, // 1 minute
+            limit: 60,
+          },
+        ],
+        storage: new ThrottlerStorageRedisService(redis),
+      }),
     }),
     PrismaModule,
     ClassificationModule,
@@ -45,6 +71,14 @@ import { HttpExceptionFilter } from '@core/filters/http-exception.filter';
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ApiVersionGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RedisThrottlerGuard,
     },
   ],
 })

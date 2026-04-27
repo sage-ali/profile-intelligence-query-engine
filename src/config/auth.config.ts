@@ -5,6 +5,6 @@ export default registerAs('auth', () => ({
   githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
   githubCallbackUrl: process.env.GITHUB_CALLBACK_URL,
   jwtSecret: process.env.JWT_SECRET,
-  jwtAccessExpiration: 180,
-  jwtRefreshExpiration: 300,
+  jwtAccessExpiration: process.env.JWT_ACCESS_EXPIRATION,
+  jwtRefreshExpiration: process.env.JWT_REFRESH_EXPIRATION,
 }));

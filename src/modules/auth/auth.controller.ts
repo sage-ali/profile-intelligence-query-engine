@@ -21,6 +21,7 @@ import {
   TokenResponseDto,
 } from './dto/auth.dto';
 import { AuthTokens } from './interfaces/auth.interfaces';
+import { ConfigService } from '@config/config.service';
 
 interface RequestWithUser extends Request {
   user: User;
@@ -29,7 +30,10 @@ interface RequestWithUser extends Request {
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Get('github')
   @UseGuards(AuthGuard('github'))
@@ -60,14 +64,14 @@ export class AuthController {
 
     res.cookie('access_token', tokens.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: this.config.isProduction,
       sameSite: 'lax',
       maxAge: 3 * 60 * 1000,
     });
 
     res.cookie('refresh_token', tokens.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: this.config.isProduction,
       sameSite: 'lax',
       maxAge: 5 * 60 * 1000,
     });
@@ -122,14 +126,14 @@ export class AuthController {
     if (cookies['refresh_token']) {
       res.cookie('access_token', tokens.accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: this.config.isProduction,
         sameSite: 'lax',
         maxAge: 3 * 60 * 1000,
       });
 
       res.cookie('refresh_token', tokens.refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: this.config.isProduction,
         sameSite: 'lax',
         maxAge: 5 * 60 * 1000,
       });

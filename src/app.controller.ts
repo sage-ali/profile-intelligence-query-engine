@@ -1,12 +1,14 @@
 import { Controller, Get, Logger } from '@nestjs/common';
 import { AppService } from './app.service';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Public } from '@core/decorators/public.decorator';
 
 /**
  * Controller providing health check and basic application endpoints.
  */
 @Controller()
 @ApiTags('health')
+@Public()
 export class AppController {
   private readonly logger = new Logger(AppController.name);
 

@@ -3,6 +3,8 @@ import { ClassificationService } from './classification.service';
 import { ClassificationQueryDto } from './dto/classification-query.dto';
 import { HttpExceptionFilter } from '@core/filters/http-exception.filter';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { Roles } from '@core/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 /**
  * Controller for gender classification of names.
@@ -10,6 +12,7 @@ import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 @Controller()
 @UseFilters(HttpExceptionFilter)
 @ApiTags('classification')
+@Roles(Role.ADMIN, Role.ANALYST)
 export class ClassificationController {
   constructor(private readonly classificationService: ClassificationService) {}
 

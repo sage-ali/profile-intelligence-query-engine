@@ -22,6 +22,7 @@ import {
 } from './dto/auth.dto';
 import { AuthTokens } from './interfaces/auth.interfaces';
 import { ConfigService } from '@config/config.service';
+import { Public } from '@core/decorators/public.decorator';
 
 interface RequestWithUser extends Request {
   user: User;
@@ -29,6 +30,7 @@ interface RequestWithUser extends Request {
 
 @ApiTags('Auth')
 @Controller('auth')
+@Public()
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

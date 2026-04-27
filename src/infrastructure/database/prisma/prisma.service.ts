@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { ConfigService } from '@config/config.service';
 
 /**
  * Service responsible for managing the Prisma Client connection to the database.
@@ -19,8 +20,8 @@ export class PrismaService
    *
    * @throws {Error} If the `DATABASE_URL` environment variable is missing or empty.
    */
-  constructor() {
-    const dbUrl = process.env.DATABASE_URL;
+  constructor(private readonly configService: ConfigService) {
+    const { url: dbUrl } = configService.database;
 
     if (typeof dbUrl !== 'string' || dbUrl.trim() === '') {
       throw new Error(

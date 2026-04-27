@@ -2,9 +2,12 @@ import { Controller, Post, Get, Body, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { Roles } from '@core/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @ApiTags('users')
 @Controller('users')
+@Roles(Role.ADMIN)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
@@ -16,7 +19,7 @@ export class UserController {
     return this.userService.create(createUserDto);
   }
 
-  @Get(':id')
+  @Get(':githubId')
   @ApiOperation({ summary: 'Get a user by GitHub ID' })
   @ApiResponse({ status: 200, description: 'User found.' })
   @ApiResponse({ status: 404, description: 'User not found.' })

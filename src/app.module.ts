@@ -18,6 +18,9 @@ import { ApiVersionGuard } from '@core/guards/api-version.guard';
 import { RedisThrottlerGuard } from '@core/guards/redis-throttler-guard.guard';
 import { UserModule } from '@modules/user/user.module';
 import { AuthModule } from '@modules/auth/auth.module';
+import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
+import { ActiveUserGuard } from '@core/guards/active-user.guard';
+import { RolesGuard } from '@core/guards/roles.guard';
 
 @Module({
   imports: [
@@ -85,6 +88,18 @@ import { AuthModule } from '@modules/auth/auth.module';
     {
       provide: APP_GUARD,
       useClass: RedisThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ActiveUserGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
   ],
 })

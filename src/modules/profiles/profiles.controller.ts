@@ -23,6 +23,8 @@ import {
 import { SearchProfilesQueryDto } from './dto/search-query.dto';
 import { NlqService } from './utils/nlq-service';
 import { BadRequestException } from '@nestjs/common';
+import { Roles } from '@core/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 /**
  * Controller for managing user profiles.
@@ -44,6 +46,7 @@ export class ProfilesController {
    * @throws {BadGatewayException} If profile enrichment fails.
    */
   @Post()
+  @Roles(Role.ADMIN)
   @ApiOperation({
     summary: 'Create a new profile with idempotency',
     description:
@@ -121,6 +124,7 @@ export class ProfilesController {
   }
 
   @Get('search')
+  @Roles(Role.ADMIN, Role.ANALYST)
   @ApiOperation({
     summary: 'Get all profiles with natural language filtering',
     description:
@@ -177,6 +181,7 @@ export class ProfilesController {
    * @throws {NotFoundException} If the profile is not found.
    */
   @Get(':id')
+  @Roles(Role.ADMIN, Role.ANALYST)
   @ApiOperation({
     summary: 'Get profile by ID',
     description: 'Retrieves a profile by its unique identifier.',
@@ -218,6 +223,7 @@ export class ProfilesController {
    * @returns A promise that resolves to a list of profiles and the total count.
    */
   @Get()
+  @Roles(Role.ADMIN, Role.ANALYST)
   @ApiOperation({
     summary: 'Get all profiles with optional filtering',
     description:
@@ -262,6 +268,7 @@ export class ProfilesController {
    * @throws {NotFoundException} If the profile is not found.
    */
   @Delete(':id')
+  @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete profile by ID',

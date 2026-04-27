@@ -43,3 +43,18 @@ export interface RefreshTokenPayload {
   session_id: string;
   familyId: string;
 }
+
+export interface GitHubPassportProfile {
+  id: string;
+  displayName: string;
+  username: string;
+  emails?: Array<{ value: string }>;
+  photos?: Array<{ value: string }>;
+  _json: {
+    id: number;
+    login: string;
+    name: string | null;
+    email: string | null;
+    avatar_url: string;
+  };
+}

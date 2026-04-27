@@ -32,7 +32,10 @@ export class RedisThrottlerGuard extends ThrottlerGuard {
     const { context, limit, ttl, throttler } = requestProps;
     const http = context.switchToHttp();
     const request = http.getRequest<Request>();
-    const isAuthRoute = request.url.startsWith('/auth');
+
+    // Account for global prefix /api
+    const isAuthRoute =
+      request.url.startsWith('/api/auth') || request.url.startsWith('/auth');
 
     // Selective Enforcement: Only apply 'auth' limit to auth routes, and 'api' to others.
     if (throttler.name === 'auth' && !isAuthRoute) return true;
@@ -79,13 +82,48 @@ export class RedisThrottlerGuard extends ThrottlerGuard {
 
   /**
    * Identify requester (user_id for auth, IP for anonymous).
+   * Since this is a global guard running BEFORE JwtAuthGuard, we manually decode the token.
    */
   protected getTracker(req: Record<string, any>): Promise<string> {
     const request = req as Request;
-    if (request.user?.id) {
-      return Promise.resolve(`user:${request.user.id}`);
+
+    // 1. Check Authorization Header
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const decoded = this.decodeToken(token);
+      if (decoded?.sub) return Promise.resolve(`user:${decoded.sub}`);
     }
+
+    // 2. Check Cookie (for web flow)
+    const tokenCookie = (
+      request.cookies as Record<string, string | undefined> | undefined
+    )?.['access_token'];
+    if (tokenCookie) {
+      const decoded = this.decodeToken(tokenCookie);
+      if (decoded?.sub) return Promise.resolve(`user:${decoded.sub}`);
+    }
+
     return Promise.resolve(`ip:${request.ip || 'unknown'}`);
+  }
+
+  /**
+   * Manually decode JWT payload without verification (faster, suitable for rate limiting tracker).
+   */
+  private decodeToken(token: string): { sub?: string } | null {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const base64Payload = parts[1];
+      const payload = Buffer.from(base64Payload, 'base64').toString();
+      if (!payload) return null;
+      const parsed = JSON.parse(payload) as Record<string, unknown>;
+      return {
+        sub: typeof parsed.sub === 'string' ? parsed.sub : undefined,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**

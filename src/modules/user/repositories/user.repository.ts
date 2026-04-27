@@ -38,4 +38,26 @@ export class UserRepository {
       where: { id },
     });
   }
+
+  /**
+   * Finds a user by GitHub ID, or creates one if they don't exist.
+   */
+  async findOrCreateByGithub(data: {
+    githubId: string;
+    email?: string;
+    name?: string;
+  }): Promise<User> {
+    return this.prisma.user.upsert({
+      where: { githubId: data.githubId },
+      update: {
+        email: data.email,
+        name: data.name,
+      },
+      create: {
+        githubId: data.githubId,
+        email: data.email,
+        name: data.name,
+      },
+    });
+  }
 }

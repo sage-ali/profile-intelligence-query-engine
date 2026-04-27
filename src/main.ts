@@ -9,7 +9,9 @@ import {
 import { Logger } from 'nestjs-pino';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as dotenv from 'dotenv';
+import cookieParser from 'cookie-parser';
 import { ApiVersionGuard } from '@core/guards/api-version.guard';
+import { Request } from 'express';
 
 dotenv.config();
 
@@ -26,10 +28,12 @@ async function bootstrap() {
     bufferLogs: true,
   });
   app.useLogger(app.get(Logger));
+  app.use(cookieParser());
 
   // Enable CORS
   app.enableCors({
     origin: '*',
+    credentials: true,
   });
 
   // Check if the right version accessed
@@ -79,20 +83,29 @@ async function bootstrap() {
 
   // Set global prefix for all routes
   app.setGlobalPrefix('api', {
-    exclude: ['/', 'health'], // Exclude health routes from the prefix
+    exclude: ['/', 'health'],
   });
 
   // Swagger configuration
   const config = new DocumentBuilder()
-    .setTitle('Intelligent profile API')
+    .setTitle('Intelligence Profiles API')
     .setDescription(
       'A NestJS-based REST API that creates an intelligent profile based on searched name.',
     )
     .setVersion('1.0')
     .addTag('classification')
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api-docs', app, document);
+  const swaggerUiOptions = {
+    swaggerOptions: {
+      requestInterceptor: (req: Request) => {
+        req.headers['X-API-Version'] = '1';
+        return req;
+      },
+    },
+  };
+  SwaggerModule.setup('api-docs', app, document, swaggerUiOptions);
 
   await app.listen(process.env.PORT ?? 3000);
 }

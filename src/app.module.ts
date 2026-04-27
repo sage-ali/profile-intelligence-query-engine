@@ -15,6 +15,7 @@ import { LoggingInterceptor } from '@core/interceptors/logging.interceptor';
 import { HttpExceptionFilter } from '@core/filters/http-exception.filter';
 import { ApiVersionGuard } from '@core/guards/api-version.guard';
 import { RedisThrottlerGuard } from '@core/guards/redis-throttler-guard.guard';
+import { UserModule } from '@modules/user/user.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { RedisThrottlerGuard } from '@core/guards/redis-throttler-guard.guard';
     PrismaModule,
     ClassificationModule,
     ProfilesModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [

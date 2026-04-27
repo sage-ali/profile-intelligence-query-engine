@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR, APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ConfigModule } from './config/config.module';
 import { LoggerModule } from 'nestjs-pino';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
@@ -16,9 +17,11 @@ import { HttpExceptionFilter } from '@core/filters/http-exception.filter';
 import { ApiVersionGuard } from '@core/guards/api-version.guard';
 import { RedisThrottlerGuard } from '@core/guards/redis-throttler-guard.guard';
 import { UserModule } from '@modules/user/user.module';
+import { AuthModule } from '@modules/auth/auth.module';
 
 @Module({
   imports: [
+    ConfigModule,
     LoggerModule.forRoot({
       pinoHttp: {
         transport:
@@ -62,6 +65,7 @@ import { UserModule } from '@modules/user/user.module';
     ClassificationModule,
     ProfilesModule,
     UserModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [

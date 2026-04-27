@@ -3,25 +3,25 @@ import {
   Catch,
   ArgumentsHost,
   HttpException,
-  Inject,
   HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { Logger } from 'nestjs-pino';
+import { PinoLogger } from 'nestjs-pino';
+import { uuidv7 } from 'uuidv7';
 
 /**
  * Filter for catching and handling HTTP exceptions across the application.
  * Normalizes error responses and logs errors using Pino.
+ * Acts as a fallback logger for requests blocked by Guards.
  */
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  constructor(@Inject(Logger) private readonly logger: Logger) {}
+  constructor(private readonly logger: PinoLogger) {
+    this.logger.setContext(HttpExceptionFilter.name);
+  }
 
   /**
    * Catches an exception and sends a formatted JSON response.
-   *
-   * @param exception - The exception being handled.
-   * @param host - The arguments host providing context for the current execution.
    */
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -30,6 +30,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'An unexpected error occurred';
+    let serviceName: string | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -44,7 +45,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         const resObj = exceptionResponse as Record<string, unknown>;
         const msg = resObj.message;
         if (Array.isArray(msg)) {
-          message = String(msg[0]); // Pick the first validation error message
+          message = String(msg[0]);
         } else if (typeof msg === 'string') {
           message = msg;
         } else {
@@ -55,7 +56,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     } else if (exception instanceof Error) {
       message = exception.message;
-      // Handle custom error classes with status property
       const err = exception as Error & {
         status?: number;
         serviceName?: string;
@@ -63,24 +63,29 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (typeof err.status === 'number') {
         status = err.status;
       }
-
-      // Use the service name for more context if available
-      const serviceName = err.serviceName;
-
-      // Use Pino logger instead of console.error
-      this.logger.error(
-        {
-          method: request.method,
-          url: request.url,
-          status,
-          message,
-          serviceName,
-          exception:
-            exception instanceof Error ? exception.message : String(exception),
-        },
-        'Unhandled exception occurred',
-      );
+      serviceName = err.serviceName;
     }
+
+    // Log the error in the same format as the LoggingInterceptor
+    // Truncate exception for 4xx errors to reduce noise, keep full stack for 5xx
+    const exceptionData =
+      status >= HttpStatus.INTERNAL_SERVER_ERROR
+        ? exception instanceof Error
+          ? exception.stack
+          : String(exception)
+        : undefined;
+
+    this.logger.error({
+      request_id: request.id || request.headers['x-correlation-id'] || uuidv7(),
+      method: request.method,
+      path: request.url.split('?')[0],
+      status_code: status,
+      userId: request.user?.id || 'anonymous',
+      context: 'HTTP_ERROR',
+      message: message,
+      exception: exceptionData,
+      serviceName,
+    });
 
     response.status(status).json({
       status: 'error',

@@ -2,6 +2,8 @@ export interface GithubProfile {
   githubId: string;
   email?: string;
   name?: string;
+  username?: string;
+  avatarUrl?: string;
 }
 
 export interface AuthTokens {
@@ -36,6 +38,7 @@ export interface GitHubUserResponse {
   email: string | null;
   name: string | null;
   login: string;
+  avatar_url: string;
 }
 
 export interface RefreshTokenPayload {

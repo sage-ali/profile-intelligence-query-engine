@@ -65,12 +65,14 @@ export class AuthService {
         },
       );
 
-      const { id, email, name, login } = userResponse.data;
+      const { id, email, name, login, avatar_url } = userResponse.data;
 
       return this.validateGithubUser({
         githubId: id.toString(),
         email: email || undefined,
         name: name || login,
+        username: login,
+        avatarUrl: avatar_url,
       });
     } catch (err) {
       if (err instanceof BadRequestException) throw err;
@@ -84,6 +86,8 @@ export class AuthService {
     details?: SessionDetails,
   ): Promise<AuthTokens> {
     const refreshTokenFamilyId = crypto.randomUUID();
+
+    await this.userRepository.updateLastLogin(user.id);
 
     const session = await this.authRepository.createSession({
       userId: user.id,
@@ -215,8 +219,9 @@ export class AuthService {
   }
 
   private getRefreshTokenExpiresAt(): Date {
+    const { jwtRefreshExpiration } = this.configService.auth;
     const date = new Date();
-    date.setMinutes(date.getMinutes() + 5);
+    date.setSeconds(date.getSeconds() + Number(jwtRefreshExpiration));
     return date;
   }
 }

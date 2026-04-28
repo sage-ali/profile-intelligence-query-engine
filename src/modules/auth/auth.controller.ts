@@ -171,4 +171,14 @@ export class AuthController {
       message: 'Logged out successfully',
     };
   }
+
+  @Get('whoami')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({ status: 200, description: 'User profile retrieved' })
+  whoami(@Req() req: RequestWithUser) {
+    return {
+      status: 'success',
+      data: req.user,
+    };
+  }
 }

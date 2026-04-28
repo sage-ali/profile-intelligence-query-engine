@@ -4,10 +4,11 @@ import { ProfilesService } from './profiles.service';
 import { ProfilesController } from './profiles.controller';
 import { PrismaModule } from '@infrastructure/database/prisma/prisma.module';
 import { NlqService } from './utils/nlq-service';
+import { ProfilesRepository } from './repositories/profiles.repository';
 
 @Module({
   imports: [HttpModule, PrismaModule],
-  providers: [ProfilesService, NlqService],
+  providers: [ProfilesService, NlqService, ProfilesRepository],
   controllers: [ProfilesController],
 })
 /**

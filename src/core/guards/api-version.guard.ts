@@ -16,7 +16,7 @@ export class ApiVersionGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
 
     // Only apply to routes starting with /api
-    if (!request.url.startsWith('/api/profiles')) {
+    if (!request.url.startsWith('/api/')) {
       return true;
     }
 
@@ -32,7 +32,7 @@ export class ApiVersionGuard implements CanActivate {
     if (version !== '1') {
       throw new BadRequestException({
         status: 'error',
-        message: 'Wrong version API version header',
+        message: 'Unsupported API version',
       });
     }
 

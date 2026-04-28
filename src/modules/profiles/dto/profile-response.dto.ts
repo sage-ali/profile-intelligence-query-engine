@@ -105,6 +105,17 @@ export class ProfileSuccessWithMessageResponseDto {
   data!: ProfileResponseDto;
 }
 
+export class ProfileLinksDto {
+  @ApiProperty({ example: '/api/profiles?page=1&limit=10' })
+  self!: string;
+
+  @ApiProperty({ example: '/api/profiles?page=2&limit=10', nullable: true })
+  next!: string | null;
+
+  @ApiProperty({ example: null, nullable: true })
+  prev!: string | null;
+}
+
 /**
  * Data transfer object for a list of profiles.
  */
@@ -128,10 +139,22 @@ export class ProfileListResponseDto {
   limit!: number;
 
   /**
-   * Total number of profiles returned.
+   * Total number of items across all pages.
    */
   @ApiProperty({ example: 2026 })
   total!: number;
+
+  /**
+   * Total number of pages.
+   */
+  @ApiProperty({ example: 203 })
+  total_pages!: number;
+
+  /**
+   * Pagination links.
+   */
+  @ApiProperty({ type: ProfileLinksDto })
+  links!: ProfileLinksDto;
 
   /**
    * Array of profile data.

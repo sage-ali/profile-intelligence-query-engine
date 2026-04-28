@@ -29,12 +29,14 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
     refreshToken: string,
     profile: GitHubPassportProfile,
   ) {
-    const { id, emails, displayName, username } = profile;
+    const { id, emails, displayName, username, _json } = profile;
 
     const user = await this.authService.validateGithubUser({
       githubId: id,
       email: emails?.[0]?.value,
       name: displayName || username,
+      username: username,
+      avatarUrl: _json.avatar_url,
     });
 
     return user;

@@ -30,6 +30,20 @@ export class ConfigService {
     };
   }
 
+  get externalApis() {
+    return {
+      genderize:
+        this.nestConfigService.get<string>('EXTERNAL_GENDERIZE_URL') ||
+        'https://api.genderize.io',
+      agify:
+        this.nestConfigService.get<string>('EXTERNAL_AGIFY_URL') ||
+        'https://api.agify.io',
+      nationalize:
+        this.nestConfigService.get<string>('EXTERNAL_NATIONALIZE_URL') ||
+        'https://api.nationalize.io',
+    };
+  }
+
   get isProduction(): boolean {
     return this.nestConfigService.get<string>('NODE_ENV') === 'production';
   }

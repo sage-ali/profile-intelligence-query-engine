@@ -30,9 +30,11 @@ export class AppController {
     description: 'Returns a welcome message indicating the API is running.',
   })
   @ApiResponse({ status: 200, description: 'API is running' })
-  getHello(): string {
-    this.logger.log('GET / endpoint called');
-    return this.appService.getHello();
+  getHello() {
+    return {
+      status: 'success',
+      data: { message: this.appService.getHello() },
+    };
   }
 
   /**
@@ -48,10 +50,12 @@ export class AppController {
   @ApiResponse({
     status: 200,
     description: 'Service is healthy',
-    schema: { example: { status: 'ok' } },
+    schema: { example: { status: 'success', data: { health: 'ok' } } },
   })
-  getHealth(): { status: string } {
-    this.logger.log('GET /health endpoint called');
-    return { status: 'ok' };
+  getHealth() {
+    return {
+      status: 'success',
+      data: { health: 'ok' },
+    };
   }
 }

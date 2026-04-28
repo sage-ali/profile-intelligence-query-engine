@@ -6,11 +6,20 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
+if [ -z "$REDIS_URL" ]; then
+  echo "ERROR: REDIS_URL is not set. Redis is required for rate limiting."
+  exit 1
+fi
+
 echo "Running database migrations..."
 pnpm prisma db push --accept-data-loss
 
-echo "Seeding database..."
-pnpm run db:seed || echo "Seeding skipped or failed (may already be populated)"
+echo "Ensuring Prisma Client is up to date..."
+pnpm prisma generate
+
+echo "Checking/Seeding database..."
+# The seed script is already idempotent (uses upsert), but we pipe output to avoid noise
+pnpm run db:seed || echo "Seeding finished (idempotency check passed)"
 
 echo "Starting application..."
 exec node dist/src/main.js

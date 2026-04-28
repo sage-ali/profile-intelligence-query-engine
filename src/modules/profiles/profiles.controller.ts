@@ -19,7 +19,6 @@ import { CreateProfileDto } from './dto/create-profile.dto';
 import { GetProfilesQueryDto } from './dto/get-profiles-query.dto';
 import {
   ProfileSuccessResponseDto,
-  ProfileSuccessWithMessageResponseDto,
   ProfileListResponseDto,
 } from './dto/profile-response.dto';
 import { SearchProfilesQueryDto } from './dto/search-query.dto';
@@ -57,13 +56,8 @@ export class ProfilesController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Profile created successfully',
+    description: 'Profile created or retrieved successfully',
     type: ProfileSuccessResponseDto,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Profile already exists',
-    type: ProfileSuccessWithMessageResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Invalid name parameter' })
   @ApiResponse({
@@ -112,7 +106,7 @@ export class ProfilesController {
   @ApiOperation({
     summary: 'Export profiles to CSV',
     description:
-      'Streams a CSV file of profiles based on the provided filters.',
+      'Streams a CSV file of profiles based on the provided filters. Requires format=csv.',
   })
   @ApiResponse({
     status: 200,
@@ -122,13 +116,20 @@ export class ProfilesController {
     @Query() query: GetProfilesQueryDto,
     @Res() res: Response,
   ): Promise<void> {
+    if (query.format !== 'csv') {
+      throw new BadRequestException({
+        status: 'error',
+        message: 'Query parameter "format=csv" is required for export',
+      });
+    }
+
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader(
       'Content-Disposition',
       `attachment; filename="profiles_${Date.now()}.csv"`,
     );
 
-    // Get all profiles without pagination for export
+    // Get all profiles without pagination for export, but keep filters and sorting
     const { data } = await this.profilesService.findAllProfiles({
       ...query,
       page: 1,

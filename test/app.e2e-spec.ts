@@ -5,6 +5,7 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/infrastructure/database/prisma/prisma.service';
 import { describe, it, beforeEach, afterEach, vi } from 'vitest';
+import { GithubStrategy } from '../src/modules/auth/strategies/github.strategy';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -21,6 +22,11 @@ describe('AppController (e2e)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue(mockPrismaService)
+      .overrideProvider(GithubStrategy)
+      .useValue({
+        // Minimal mock to satisfy the injector
+        validate: vi.fn(),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -31,10 +37,15 @@ describe('AppController (e2e)', () => {
     return request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello World!');
+      .expect({
+        status: 'success',
+        data: { message: 'Hello World!' },
+      });
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 });

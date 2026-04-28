@@ -14,6 +14,7 @@ import { Prisma } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
 import { ExternalApiError } from '@core/errors/ExternalApiError';
 import { ProfilesRepository } from './repositories/profiles.repository';
+import { ConfigService } from '@config/config.service';
 
 // Check it here, outside the class
 const PROXY_URL = process.env.PROXY_URL;
@@ -30,6 +31,7 @@ export class ProfilesService {
   constructor(
     private readonly httpService: HttpService,
     private readonly profilesRepository: ProfilesRepository,
+    private readonly configService: ConfigService,
     @Inject(Logger) private readonly logger: Logger,
   ) {}
 
@@ -41,10 +43,11 @@ export class ProfilesService {
    * @throws {HttpException} If an external API returns an invalid response or fails.
    */
   async enrichProfile(name: string): Promise<EnrichedProfile | undefined> {
+    const { genderize, agify, nationalize } = this.configService.externalApis;
     const urls = {
-      genderize: `https://api.genderize.io?name=${name}`,
-      agify: `https://api.agify.io?name=${name}`,
-      nationalize: `https://api.nationalize.io?name=${name}`,
+      genderize: `${genderize}?name=${name}`,
+      agify: `${agify}?name=${name}`,
+      nationalize: `${nationalize}?name=${name}`,
     };
 
     try {

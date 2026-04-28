@@ -10,6 +10,8 @@ import {
   HttpStatus,
   NotFoundException,
   BadGatewayException,
+  Res,
+  Req,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ProfilesService } from './profiles.service';
@@ -24,7 +26,8 @@ import { SearchProfilesQueryDto } from './dto/search-query.dto';
 import { NlqService } from './utils/nlq-service';
 import { BadRequestException } from '@nestjs/common';
 import { Roles } from '@core/decorators/roles.decorator';
-import { Role } from '@prisma/client';
+import { Role, Profile } from '@prisma/client';
+import type { Response, Request } from 'express';
 
 /**
  * Controller for managing user profiles.
@@ -69,30 +72,11 @@ export class ProfilesController {
   })
   async create(
     @Body() createProfileDto: CreateProfileDto,
-  ): Promise<ProfileSuccessResponseDto | ProfileSuccessWithMessageResponseDto> {
+  ): Promise<ProfileSuccessResponseDto> {
     try {
       const result = await this.profilesService.createProfile(
         createProfileDto.name,
       );
-
-      if (result.existing) {
-        return {
-          status: 'success',
-          message: 'Profile already exists',
-          data: {
-            id: result.profile.id,
-            name: result.profile.name,
-            gender: result.profile.gender,
-            gender_probability: result.profile.gender_probability,
-            age: result.profile.age,
-            age_group: result.profile.age_group,
-            country_id: result.profile.country_id,
-            country_name: result.profile.country_name,
-            country_probability: result.profile.country_probability,
-            created_at: result.profile.created_at,
-          },
-        };
-      }
 
       return {
         status: 'success',
@@ -123,6 +107,57 @@ export class ProfilesController {
     }
   }
 
+  @Get('export')
+  @Roles(Role.ADMIN, Role.ANALYST)
+  @ApiOperation({
+    summary: 'Export profiles to CSV',
+    description:
+      'Streams a CSV file of profiles based on the provided filters.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'CSV file streamed successfully',
+  })
+  async export(
+    @Query() query: GetProfilesQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="profiles_${Date.now()}.csv"`,
+    );
+
+    // Get all profiles without pagination for export
+    const { data } = await this.profilesService.findAllProfiles({
+      ...query,
+      page: 1,
+      limit: 1000000, // Effectively "all" for this use case
+    });
+
+    const header =
+      'id,name,gender,gender_probability,age,age_group,country_id,country_name,country_probability,created_at\n';
+    res.write(header);
+
+    for (const profile of data) {
+      const row = [
+        profile.id,
+        `"${profile.name.replace(/"/g, '""')}"`,
+        profile.gender,
+        profile.gender_probability,
+        profile.age,
+        profile.age_group,
+        profile.country_id,
+        `"${profile.country_name.replace(/"/g, '""')}"`,
+        profile.country_probability,
+        profile.created_at.toISOString(),
+      ].join(',');
+      res.write(row + '\n');
+    }
+
+    res.end();
+  }
+
   @Get('search')
   @Roles(Role.ADMIN, Role.ANALYST)
   @ApiOperation({
@@ -137,6 +172,7 @@ export class ProfilesController {
   })
   async search(
     @Query() query: SearchProfilesQueryDto,
+    @Req() req: Request,
   ): Promise<ProfileListResponseDto> {
     const parsed = this.nlqService.parse(query.q);
 
@@ -146,31 +182,13 @@ export class ProfilesController {
         message: 'Unable to interpret query',
       });
     }
-    const { page, limit, total, data } =
-      await this.profilesService.findAllProfiles({
-        ...parsed,
-        page: query.page,
-        limit: query.limit,
-      });
+    const result = await this.profilesService.findAllProfiles({
+      ...parsed,
+      page: query.page,
+      limit: query.limit,
+    });
 
-    return {
-      status: 'success',
-      page,
-      limit,
-      total,
-      data: data.map((profile) => ({
-        id: profile.id,
-        name: profile.name,
-        gender: profile.gender,
-        gender_probability: profile.gender_probability,
-        age: profile.age,
-        age_group: profile.age_group,
-        country_id: profile.country_id,
-        country_name: profile.country_name,
-        country_probability: profile.country_probability,
-        created_at: profile.created_at,
-      })),
-    };
+    return this.formatPaginatedResponse(result, req);
   }
 
   /**
@@ -236,28 +254,10 @@ export class ProfilesController {
   })
   async findAll(
     @Query() query: GetProfilesQueryDto,
+    @Req() req: Request,
   ): Promise<ProfileListResponseDto> {
-    const { page, limit, total, data } =
-      await this.profilesService.findAllProfiles(query);
-
-    return {
-      status: 'success',
-      page,
-      limit,
-      total,
-      data: data.map((profile) => ({
-        id: profile.id,
-        name: profile.name,
-        gender: profile.gender,
-        gender_probability: profile.gender_probability,
-        age: profile.age,
-        age_group: profile.age_group,
-        country_id: profile.country_id,
-        country_name: profile.country_name,
-        country_probability: profile.country_probability,
-        created_at: profile.created_at,
-      })),
-    };
+    const result = await this.profilesService.findAllProfiles(query);
+    return this.formatPaginatedResponse(result, req);
   }
 
   /**
@@ -285,5 +285,65 @@ export class ProfilesController {
     } catch {
       throw new NotFoundException('Profile not found');
     }
+  }
+
+  private formatPaginatedResponse(
+    result: {
+      page: number;
+      limit: number;
+      total: number;
+      data: Profile[];
+    },
+    req: Request,
+  ): ProfileListResponseDto {
+    const totalPages = Math.ceil(result.total / result.limit);
+    const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}${req.path}`;
+
+    const getUrl = (p: number) => {
+      const url = new URL(baseUrl);
+      // Copy current query params
+      const isStringable = (val: unknown): val is string | number | boolean =>
+        ['string', 'number', 'boolean'].includes(typeof val);
+
+      for (const [key, value] of Object.entries(req.query)) {
+        if (value !== undefined) {
+          if (Array.isArray(value)) {
+            value.forEach((v) => {
+              if (isStringable(v)) url.searchParams.append(key, v.toString());
+            });
+          } else if (isStringable(value)) {
+            url.searchParams.set(key, value.toString());
+          }
+        }
+      }
+      url.searchParams.set('page', p.toString());
+      url.searchParams.set('limit', result.limit.toString());
+      return url.pathname + url.search;
+    };
+
+    return {
+      status: 'success',
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
+      total_pages: totalPages,
+      links: {
+        self: getUrl(result.page),
+        next: result.page < totalPages ? getUrl(result.page + 1) : null,
+        prev: result.page > 1 ? getUrl(result.page - 1) : null,
+      },
+      data: result.data.map((profile) => ({
+        id: profile.id,
+        name: profile.name,
+        gender: profile.gender,
+        gender_probability: profile.gender_probability,
+        age: profile.age,
+        age_group: profile.age_group,
+        country_id: profile.country_id,
+        country_name: profile.country_name,
+        country_probability: profile.country_probability,
+        created_at: profile.created_at,
+      })),
+    };
   }
 }

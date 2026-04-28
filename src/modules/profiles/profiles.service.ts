@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import {
   GenderizeResponse,
   AgifyResponse,
@@ -11,10 +10,10 @@ import {
 import { buildProfileQuery } from './utils/build-profile-query';
 import { BuildProfileQueryInput } from './types/profile-query.types';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { uuidv7 } from 'uuidv7';
 import { Prisma } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
 import { ExternalApiError } from '@core/errors/ExternalApiError';
+import { ProfilesRepository } from './repositories/profiles.repository';
 
 // Check it here, outside the class
 const PROXY_URL = process.env.PROXY_URL;
@@ -30,7 +29,7 @@ export class ProfilesService {
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly prisma: PrismaService,
+    private readonly profilesRepository: ProfilesRepository,
     @Inject(Logger) private readonly logger: Logger,
   ) {}
 
@@ -182,9 +181,8 @@ export class ProfilesService {
     const normalizedName = name.toLowerCase();
 
     // Check for existing profile (idempotency)
-    const existingProfile = await this.prisma.profile.findUnique({
-      where: { name: normalizedName },
-    });
+    const existingProfile =
+      await this.profilesRepository.findByName(normalizedName);
 
     if (existingProfile) {
       return {
@@ -200,23 +198,17 @@ export class ProfilesService {
       throw new ExternalApiError('Failed to enrich profile data', 502);
     }
 
-    // Generate UUID v7
-    const id = uuidv7();
-
     // Create new profile
-    const newProfile = await this.prisma.profile.create({
-      data: {
-        id,
-        name: normalizedName,
-        gender: enrichedData.gender,
-        gender_probability: enrichedData.probability || 0,
-        age: enrichedData.age,
-        age_group: enrichedData.age_group,
-        country_id: enrichedData.top_nationality.country_id,
-        country_name: enrichedData.top_nationality.country_name,
-        country_probability: enrichedData.top_nationality.probability,
-        created_at: new Date(),
-      },
+    const newProfile = await this.profilesRepository.create({
+      name: normalizedName,
+      gender: enrichedData.gender,
+      gender_probability: enrichedData.probability || 0,
+      age: enrichedData.age,
+      age_group: enrichedData.age_group,
+      country_id: enrichedData.top_nationality.country_id,
+      country_name: enrichedData.top_nationality.country_name,
+      country_probability: enrichedData.top_nationality.probability,
+      created_at: new Date(),
     });
 
     return {
@@ -232,9 +224,7 @@ export class ProfilesService {
    * @returns A promise that resolves to the profile or null if not found.
    */
   async findProfileById(id: string) {
-    return this.prisma.profile.findUnique({
-      where: { id },
-    });
+    return this.profilesRepository.findById(id);
   }
 
   /**
@@ -248,8 +238,8 @@ export class ProfilesService {
       buildProfileQuery(query);
 
     const [total, data] = await Promise.all([
-      this.prisma.profile.count({ where }),
-      this.prisma.profile.findMany({
+      this.profilesRepository.count(where),
+      this.profilesRepository.findMany({
         where,
         orderBy,
         skip,
@@ -274,9 +264,7 @@ export class ProfilesService {
    */
   async deleteProfile(id: string) {
     try {
-      return await this.prisma.profile.delete({
-        where: { id },
-      });
+      return await this.profilesRepository.delete(id);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         throw new NotFoundException('Profile not found');

@@ -130,4 +130,12 @@ export class GetProfilesQueryDto {
   @IsOptional()
   @IsIn(SORT_ORDERS)
   order: (typeof SORT_ORDERS)[number] = 'desc';
+
+  @ApiPropertyOptional({
+    description: 'Export format',
+    enum: ['csv'],
+  })
+  @IsOptional()
+  @IsIn(['csv'])
+  format?: string;
 }

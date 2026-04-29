@@ -8,6 +8,7 @@ import { ConfigService } from '../../config/config.service';
 import { UserRepository } from '../user/repositories/user.repository';
 import { AuthRepository } from './repositories/auth.repository';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { RedisService } from '@infrastructure/redis/redis.service';
 import { User } from '@prisma/client';
 import * as crypto from 'crypto';
 import axios from 'axios';
@@ -29,13 +30,95 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
   ) {}
 
   async validateGithubUser(profile: GithubProfile): Promise<User> {
     return this.userRepository.findOrCreateByGithub(profile);
   }
 
-  async verifyGithubCode(code: string, codeVerifier: string): Promise<User> {
+  generatePkce(): { codeVerifier: string; codeChallenge: string } {
+    const codeVerifier = crypto
+      .randomBytes(32)
+      .toString('base64url')
+      .replace(/=/g, '');
+    const codeChallenge = crypto
+      .createHash('sha256')
+      .update(codeVerifier)
+      .digest()
+      .toString('base64url')
+      .replace(/=/g, '');
+
+    return { codeVerifier, codeChallenge };
+  }
+
+  async getGitHubAuthUrl(
+    clientType: 'web' | 'cli',
+    customRedirectUri?: string,
+  ): Promise<string> {
+    const { githubClientId, githubCallbackUrl } = this.configService.auth;
+
+    if (!githubClientId || !githubCallbackUrl) {
+      throw new Error('GitHub configuration is missing');
+    }
+
+    const { codeVerifier, codeChallenge } = this.generatePkce();
+    const state = crypto.randomBytes(16).toString('hex');
+
+    const stateData = JSON.stringify({
+      codeVerifier,
+      clientType,
+      customRedirectUri,
+    });
+
+    await this.redisService.getClient().set(
+      `github_auth_state:${state}`,
+      stateData,
+      'EX',
+      600, // 10 minutes
+    );
+
+    const url = new URL('https://github.com/login/oauth/authorize');
+    url.searchParams.append('client_id', githubClientId);
+    url.searchParams.append('redirect_uri', githubCallbackUrl);
+    url.searchParams.append('state', state);
+    url.searchParams.append('scope', 'user:email');
+    url.searchParams.append('code_challenge', codeChallenge);
+    url.searchParams.append('code_challenge_method', 'S256');
+
+    return url.toString();
+  }
+
+  async handleGitHubCallback(
+    code: string,
+    state: string,
+  ): Promise<{
+    user: User;
+    clientType: 'web' | 'cli';
+    customRedirectUri?: string;
+  }> {
+    const stateKey = `github_auth_state:${state}`;
+    const stateDataRaw = await this.redisService.getClient().get(stateKey);
+
+    if (!stateDataRaw) {
+      throw new BadRequestException('Invalid or expired state');
+    }
+
+    await this.redisService.getClient().del(stateKey);
+    const { codeVerifier, clientType, customRedirectUri } = JSON.parse(
+      stateDataRaw,
+    ) as {
+      codeVerifier: string;
+      clientType: 'web' | 'cli';
+      customRedirectUri?: string;
+    };
+
+    const user = await this.verifyGithubCode(code, codeVerifier);
+
+    return { user, clientType, customRedirectUri };
+  }
+
+  async verifyGithubCode(code: string, codeVerifier?: string): Promise<User> {
     try {
       const { githubClientId, githubClientSecret } = this.configService.auth;
 
@@ -45,7 +128,7 @@ export class AuthService {
           client_id: githubClientId,
           client_secret: githubClientSecret,
           code,
-          code_verifier: codeVerifier,
+          ...(codeVerifier && { code_verifier: codeVerifier }),
         },
         {
           headers: { Accept: 'application/json' },

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class TokenResponseDto {
   @ApiProperty()
@@ -30,4 +30,15 @@ export class RefreshTokenDto {
   @IsString()
   @IsNotEmpty()
   refresh_token?: string;
+}
+
+export class GitHubLoginQueryDto {
+  @ApiProperty({ enum: ['web', 'cli'] })
+  @IsEnum(['web', 'cli'])
+  client_type: 'web' | 'cli' = 'web';
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  redirect_uri?: string;
 }

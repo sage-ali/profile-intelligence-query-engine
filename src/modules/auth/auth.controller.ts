@@ -6,23 +6,23 @@ import {
   Req,
   Ip,
   Headers,
-  UseGuards,
   Res,
   UnauthorizedException,
+  Query,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
 import { type Request, type Response } from 'express';
 import { User } from '@prisma/client';
 import {
-  ExchangeCodeDto,
+  GitHubLoginQueryDto,
   RefreshTokenDto,
   TokenResponseDto,
 } from './dto/auth.dto';
 import { AuthTokens } from './interfaces/auth.interfaces';
 import { ConfigService } from '@config/config.service';
 import { Public } from '@core/decorators/public.decorator';
+import { CsrfUtil } from '@shared/utils/csrf.util';
 
 interface RequestWithUser extends Request {
   user: User;
@@ -38,72 +38,69 @@ export class AuthController {
   ) {}
 
   @Get('github')
-  @UseGuards(AuthGuard('github'))
-  @ApiOperation({ summary: 'Initiate GitHub Web Login (Redirect)' })
-  async githubLogin() {
-    // Standard Passport-GitHub flow starts here
+  @ApiOperation({ summary: 'Initiate GitHub OAuth Login with PKCE' })
+  async githubLogin(@Query() query: GitHubLoginQueryDto, @Res() res: Response) {
+    const url = await this.authService.getGitHubAuthUrl(
+      query.client_type,
+      query.redirect_uri,
+    );
+    return res.redirect(url);
   }
 
   @Get('github/callback')
-  @UseGuards(AuthGuard('github'))
   @ApiOperation({ summary: 'GitHub OAuth Callback' })
-  @ApiResponse({ type: TokenResponseDto })
   async githubCallback(
-    @Req() req: RequestWithUser,
+    @Query('code') code: string,
+    @Query('state') state: string,
     @Res({ passthrough: true }) res: Response,
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
-  ): Promise<{ status: string; message: string }> {
-    if (!req.user) {
-      throw new UnauthorizedException('GitHub authentication failed');
+  ) {
+    const { user, clientType, customRedirectUri } =
+      await this.authService.handleGitHubCallback(code, state);
+
+    const tokens: AuthTokens = await this.authService.login(user, clientType, {
+      ip,
+      userAgent,
+    });
+
+    if (clientType === 'web') {
+      const csrfToken = CsrfUtil.generateToken();
+
+      res.cookie('access_token', tokens.accessToken, {
+        httpOnly: true,
+        secure: this.config.isProduction,
+        sameSite: 'lax',
+        maxAge: 3 * 60 * 1000,
+      });
+
+      res.cookie('refresh_token', tokens.refreshToken, {
+        httpOnly: true,
+        secure: this.config.isProduction,
+        sameSite: 'lax',
+        maxAge: 5 * 60 * 1000,
+      });
+
+      // CSRF token cookie (readable by JavaScript for double-submit pattern)
+      res.cookie('csrf_token', csrfToken, {
+        httpOnly: false, // Must be readable by client-side JavaScript
+        secure: this.config.isProduction,
+        sameSite: 'lax',
+        maxAge: 5 * 60 * 1000, // Same lifetime as refresh token
+      });
+
+      return res.redirect(this.config.auth.frontendUrl!);
     }
 
-    const user = req.user;
-    const tokens: AuthTokens = await this.authService.login(user, 'web', {
-      ip,
-      userAgent,
-    });
+    // CLI flow: redirect to the CLI local listener with tokens in URL
+    const redirectUrl = new URL(
+      customRedirectUri || 'http://localhost:1234/callback',
+    );
+    redirectUrl.searchParams.append('access_token', tokens.accessToken);
+    redirectUrl.searchParams.append('refresh_token', tokens.refreshToken);
+    redirectUrl.searchParams.append('status', 'success');
 
-    res.cookie('access_token', tokens.accessToken, {
-      httpOnly: true,
-      secure: this.config.isProduction,
-      sameSite: 'lax',
-      maxAge: 3 * 60 * 1000,
-    });
-
-    res.cookie('refresh_token', tokens.refreshToken, {
-      httpOnly: true,
-      secure: this.config.isProduction,
-      sameSite: 'lax',
-      maxAge: 5 * 60 * 1000,
-    });
-
-    return {
-      status: 'success',
-      message: 'Logged in successfully via Web',
-    };
-  }
-
-  @Post('github/exchange')
-  @ApiOperation({ summary: 'Exchange GitHub Code for Tokens (CLI PKCE)' })
-  @ApiResponse({ type: TokenResponseDto })
-  async exchangeCode(
-    @Body() exchangeCodeDto: ExchangeCodeDto,
-    @Ip() ip: string,
-    @Headers('user-agent') userAgent: string,
-  ): Promise<TokenResponseDto> {
-    const { code, code_verifier } = exchangeCodeDto;
-    const user = await this.authService.verifyGithubCode(code, code_verifier);
-    const tokens: AuthTokens = await this.authService.login(user, 'cli', {
-      ip,
-      userAgent,
-    });
-
-    return {
-      status: 'success',
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-    };
+    return res.redirect(redirectUrl.toString());
   }
 
   @Post('refresh')
@@ -126,6 +123,8 @@ export class AuthController {
       await this.authService.refreshTokens(refreshToken);
 
     if (cookies['refresh_token']) {
+      const csrfToken = CsrfUtil.generateToken();
+
       res.cookie('access_token', tokens.accessToken, {
         httpOnly: true,
         secure: this.config.isProduction,
@@ -135,6 +134,14 @@ export class AuthController {
 
       res.cookie('refresh_token', tokens.refreshToken, {
         httpOnly: true,
+        secure: this.config.isProduction,
+        sameSite: 'lax',
+        maxAge: 5 * 60 * 1000,
+      });
+
+      // Regenerate CSRF token on refresh for additional security
+      res.cookie('csrf_token', csrfToken, {
+        httpOnly: false,
         secure: this.config.isProduction,
         sameSite: 'lax',
         maxAge: 5 * 60 * 1000,

@@ -14,6 +14,7 @@ export class ConfigService {
       githubCallbackUrl: this.nestConfigService.get<string>(
         'auth.githubCallbackUrl',
       ),
+      frontendUrl: this.nestConfigService.get<string>('auth.frontendUrl'),
       jwtSecret: this.nestConfigService.get<string>('auth.jwtSecret'),
       jwtAccessExpiration: this.nestConfigService.get<number>(
         'auth.jwtAccessExpiration',

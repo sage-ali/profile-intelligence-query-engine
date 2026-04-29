@@ -21,6 +21,7 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { ActiveUserGuard } from '@core/guards/active-user.guard';
 import { RolesGuard } from '@core/guards/roles.guard';
+import { CsrfGuard } from '@core/guards/csrf.guard';
 
 @Module({
   imports: [
@@ -96,6 +97,10 @@ import { RolesGuard } from '@core/guards/roles.guard';
     {
       provide: APP_GUARD,
       useClass: ActiveUserGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
     },
     {
       provide: APP_GUARD,

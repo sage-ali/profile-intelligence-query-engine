@@ -63,12 +63,12 @@ Authorization: Bearer <access_token>  (or valid session cookie)
 
 | Method | Endpoint | Access | Description |
 |:--- |:--- |:--- |:--- |
-| `GET` | `/api/auth/github` | Public | Initiates GitHub OAuth flow. |
-| `GET` | `/api/auth/github/callback` | Public | Handles GitHub OAuth callback. |
-| `POST` | `/api/auth/refresh` | Public | Rotates Access/Refresh tokens. |
-| `POST` | `/api/auth/logout` | User | Invalidates refresh token and clears session. |
-| `GET` | `/api/auth/whoami` | User | Returns the current session's user data. |
-| `GET` | `/api/auth/csrf-token` | User | Retrieves CSRF token for web clients. |
+| `GET` | `/auth/github` | Public | Initiates GitHub OAuth flow. |
+| `GET` | `/auth/github/callback` | Public | Handles GitHub OAuth callback. |
+| `POST` | `/auth/refresh` | Public | Rotates Access/Refresh tokens. |
+| `POST` | `/auth/logout` | User | Invalidates refresh token and clears session. |
+| `GET` | `/auth/whoami` | User | Returns the current session's user data. |
+| `GET` | `/auth/csrf-token` | User | Retrieves CSRF token for web clients. |
 | `POST` | `/api/profiles` | Admin | Enriches and stores a new profile. |
 | `GET` | `/api/profiles` | Analyst+ | Advanced filtered search with HATEOAS. |
 | `GET` | `/api/profiles/search` | Analyst+ | Natural Language Query search. |
@@ -117,7 +117,7 @@ fetch('/api/profiles', {
 
 **Note**: CLI and API clients using Bearer token authentication are **exempt** from CSRF protection as they don't use cookies.
 
-**Token Retrieval**: If needed, web clients can fetch a fresh CSRF token via `GET /api/auth/csrf-token`.
+**Token Retrieval**: If needed, web clients can fetch a fresh CSRF token via `GET /auth/csrf-token`.
 
 ---
 
@@ -135,7 +135,7 @@ REDIS_URL="redis://localhost:6379"
 # GitHub OAuth
 GITHUB_CLIENT_ID="your_id"
 GITHUB_CLIENT_SECRET="your_secret"
-GITHUB_CALLBACK_URL="http://localhost:3000/api/auth/github/callback"
+GITHUB_CALLBACK_URL="http://localhost:3000/auth/github/callback"
 
 # Token Expiry (Seconds)
 JWT_ACCESS_EXPIRATION=180

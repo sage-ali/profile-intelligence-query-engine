@@ -82,8 +82,9 @@ async function bootstrap() {
   );
 
   // Set global prefix for all routes
+  // Auth routes are excluded to be accessible at /auth/* instead of /api/auth/*
   app.setGlobalPrefix('api', {
-    exclude: ['/', 'health'],
+    exclude: ['/', 'health', 'auth/*path'],
   });
 
   // Swagger configuration

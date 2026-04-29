@@ -4,8 +4,8 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/infrastructure/database/prisma/prisma.service';
+import { REDIS_CLIENT } from '../src/infrastructure/redis/redis.constants';
 import { describe, it, beforeEach, afterEach, vi } from 'vitest';
-import { GithubStrategy } from '../src/modules/auth/strategies/github.strategy';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -16,17 +16,33 @@ describe('AppController (e2e)', () => {
     onModuleDestroy: vi.fn().mockResolvedValue(undefined),
   };
 
+  const mockRedisClient = {
+    get: vi.fn(),
+    set: vi.fn(),
+    del: vi.fn(),
+    quit: vi.fn().mockResolvedValue('OK'),
+    on: vi.fn(),
+    multi: vi.fn().mockReturnValue({
+      zadd: vi.fn().mockReturnThis(),
+      zremrangebyscore: vi.fn().mockReturnThis(),
+      zcard: vi.fn().mockReturnThis(),
+      expire: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([
+        [null, 'OK'],
+        [null, 0],
+        [null, 1],
+      ]),
+    }),
+  };
+
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
       .useValue(mockPrismaService)
-      .overrideProvider(GithubStrategy)
-      .useValue({
-        // Minimal mock to satisfy the injector
-        validate: vi.fn(),
-      })
+      .overrideProvider(REDIS_CLIENT)
+      .useValue(mockRedisClient)
       .compile();
 
     app = moduleFixture.createNestApplication();

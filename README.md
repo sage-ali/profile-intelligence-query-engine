@@ -5,6 +5,7 @@ Insighta Labs+ is a demographic intelligence platform that collects, enriches, a
 ---
 
 ## 🚀 Core Outcomes
+
 - **Secure Access**: Mandatory authentication via GitHub OAuth with PKCE.
 - **Session Management**: Secure lifecycle using Access (3m) and Refresh (5m) tokens with family rotation.
 - **RBAC**: Strict role enforcement (`admin` vs `analyst`).
@@ -16,24 +17,31 @@ Insighta Labs+ is a demographic intelligence platform that collects, enriches, a
 ## 🛠 Features & Technical Implementation
 
 ### 1. Authentication & Security (PKCE Flow)
+
 We implement a high-security OAuth2 flow tailored for both Web and CLI clients:
+
 - **CLI Flow**: Supports PKCE (Proof Key for Code Exchange). The CLI generates a `code_challenge`, and the backend verifies the `code_verifier` during the exchange.
 - **Web Flow**: Uses secure, HTTP-only, SameSite=Lax cookies to prevent XSS and CSRF.
+- **CSRF Protection**: Double-submit cookie pattern protects state-changing operations. Web clients must include the `csrf_token` cookie value in the `X-CSRF-Token` header for POST, PUT, DELETE, and PATCH requests.
 - **Token Rotation**: On every refresh, the old refresh token is immediately invalidated, and a new pair is issued. Reusing an old token triggers a "Family Revocation," logging out all sessions for that user as a security precaution.
 
 ### 2. Role-Based Access Control (RBAC)
+
 User permissions are managed through a structured decorator approach:
+
 - **`admin`**: Full access. Can create, delete, and query profiles.
 - **`analyst`**: Read-only access. Can list, search, and export profiles.
 - **`ActiveUserGuard`**: A global guard that checks the `is_active` flag. Inactive users receive a `403 Forbidden` on all requests.
 
 ### 3. Intelligence Query Engine (Stage 2 Core)
+
 - **Natural Language Query (NLQ)**: A rule-based parsing engine (No AI/LLM required) that converts plain English into structured filters.
   - *Example*: `young males from nigeria` → `gender=male, min_age=16, max_age=24, country_id=NG`.
 - **Advanced Filtering**: Combine 7+ parameters (age ranges, probability thresholds, country codes) into a single query.
 - **HATEOAS Pagination**: Responses include `total_pages` and a `links` object providing `self`, `next`, and `prev` navigation URLs.
 
 ### 4. CSV Export Engine
+
 - **Endpoint**: `GET /api/profiles/export?format=csv`
 - **Streaming**: Native Node.js stream implementation to handle large datasets without memory spikes.
 - **Consistency**: Supports the exact same filtering and sorting parameters as the standard list endpoint.
@@ -43,7 +51,9 @@ User permissions are managed through a structured decorator approach:
 ## 📡 API Contract
 
 ### Mandatory Headers
+
 All `/api/*` endpoints require:
+
 ```http
 X-API-Version: 1
 Authorization: Bearer <access_token>  (or valid session cookie)
@@ -53,9 +63,12 @@ Authorization: Bearer <access_token>  (or valid session cookie)
 
 | Method | Endpoint | Access | Description |
 |:--- |:--- |:--- |:--- |
-| `GET` | `/auth/github` | Public | Initiates GitHub OAuth flow. |
-| `POST` | `/auth/refresh` | Public | Rotates Access/Refresh tokens. |
-| `GET` | `/auth/whoami` | User | Returns the current session's user data. |
+| `GET` | `/api/auth/github` | Public | Initiates GitHub OAuth flow. |
+| `GET` | `/api/auth/github/callback` | Public | Handles GitHub OAuth callback. |
+| `POST` | `/api/auth/refresh` | Public | Rotates Access/Refresh tokens. |
+| `POST` | `/api/auth/logout` | User | Invalidates refresh token and clears session. |
+| `GET` | `/api/auth/whoami` | User | Returns the current session's user data. |
+| `GET` | `/api/auth/csrf-token` | User | Retrieves CSRF token for web clients. |
 | `POST` | `/api/profiles` | Admin | Enriches and stores a new profile. |
 | `GET` | `/api/profiles` | Analyst+ | Advanced filtered search with HATEOAS. |
 | `GET` | `/api/profiles/search` | Analyst+ | Natural Language Query search. |
@@ -72,10 +85,48 @@ Authorization: Bearer <access_token>  (or valid session cookie)
 
 ---
 
+## 🔒 CSRF Protection for Web Clients
+
+The system implements the **double-submit cookie pattern** for CSRF protection:
+
+1. **Token Generation**: Upon successful login or token refresh, the server issues a `csrf_token` cookie (readable by JavaScript).
+2. **Token Submission**: Web clients must include this token in the `X-CSRF-Token` header for all state-changing requests (POST, PUT, DELETE, PATCH).
+3. **Token Validation**: The server validates that the header value matches the cookie value before processing the request.
+
+**JavaScript Example**:
+
+```javascript
+// Retrieve CSRF token from cookie
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? match[2] : null;
+}
+
+// Make authenticated request with CSRF protection
+fetch('/api/profiles', {
+  method: 'POST',
+  headers: {
+    'X-API-Version': '1',
+    'X-CSRF-Token': getCookie('csrf_token'),
+    'Content-Type': 'application/json',
+  },
+  credentials: 'include', // Include cookies
+  body: JSON.stringify({ name: 'Jane Doe' }),
+});
+```
+
+**Note**: CLI and API clients using Bearer token authentication are **exempt** from CSRF protection as they don't use cookies.
+
+**Token Retrieval**: If needed, web clients can fetch a fresh CSRF token via `GET /api/auth/csrf-token`.
+
+---
+
 ## 🛠 Local Setup
 
 ### 1. Environment Configuration
+
 Create a `.env` file based on `.env.example`:
+
 ```env
 PORT=3000
 DATABASE_URL="postgresql://sage:sage@12345@localhost:5432/Intelligence-profile"
@@ -92,6 +143,7 @@ JWT_REFRESH_EXPIRATION=300
 ```
 
 ### 2. Infrastructure
+
 ```bash
 # Start Postgres & Redis
 docker compose up -d
@@ -107,6 +159,7 @@ pnpm run start:dev
 ---
 
 ## 🧪 Validation
+
 ```bash
 pnpm build  # Verify compilation
 pnpm lint   # Enforce style standards
@@ -116,4 +169,5 @@ pnpm test   # Run Unit and E2E regression suite
 ---
 
 ## 📜 License
+
 © 2026 Insighta Labs+. All rights reserved.

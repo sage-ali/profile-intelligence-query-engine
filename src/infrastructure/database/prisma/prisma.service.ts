@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { ConfigService } from '@config/config.service';
 
 /**
@@ -30,7 +31,11 @@ export class PrismaService
     }
 
     // 1. Wrap the database connection string in the Prisma 7 adapter
-    const adapter = new PrismaPg(dbUrl);
+    const pool = new Pool({
+      connectionString: dbUrl,
+      ssl: { rejectUnauthorized: false },
+    });
+    const adapter = new PrismaPg(pool);
 
     // 2. Pass the adapter to the PrismaClient constructor
     super({ adapter });

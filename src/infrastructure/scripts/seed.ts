@@ -1,6 +1,7 @@
 // prisma/seed.ts
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { uuidv7 } from 'uuidv7';
@@ -12,7 +13,11 @@ if (typeof dbUrl !== 'string' || dbUrl.trim() === '') {
   throw new Error('DATABASE_URL environment variable is missing.');
 }
 
-const adapter = new PrismaPg(dbUrl);
+const pool = new Pool({
+  connectionString: dbUrl,
+  ssl: { rejectUnauthorized: false },
+});
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 type SeedProfile = {

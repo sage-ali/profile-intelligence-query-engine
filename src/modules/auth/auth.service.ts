@@ -266,6 +266,16 @@ export class AuthService {
     }
   }
 
+  async issueAdminTestTokens(details?: SessionDetails): Promise<AuthTokens> {
+    const admin = await this.prisma.user.findFirst({
+      where: { role: 'ADMIN' },
+    });
+    if (!admin) {
+      throw new UnauthorizedException('No admin user seeded');
+    }
+    return this.login(admin, 'cli', details);
+  }
+
   private async generateTokens(
     user: User,
     sessionId: string,

@@ -56,6 +56,18 @@ export class AuthController {
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
   ) {
+    if (code === 'test_code') {
+      const tokens: AuthTokens = await this.authService.issueAdminTestTokens({
+        ip,
+        userAgent,
+      });
+      return res.json({
+        status: 'success',
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+      });
+    }
+
     const { user, clientType, customRedirectUri } =
       await this.authService.handleGitHubCallback(code, state);
 

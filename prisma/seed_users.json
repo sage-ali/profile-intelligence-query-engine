@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "githubId": "81039794",
+      "email": "sageample@gmail.com",
+      "name": "Ali A",
+      "role": "ADMIN"
+    },
+    {
+      "githubId": "48112780",
+      "email": "analyst@insighta.io",
+      "name": "Test Analyst",
+      "role": "ANALYST"
+    }
+  ]
+}

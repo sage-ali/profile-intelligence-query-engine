@@ -68,7 +68,7 @@ export class RedisThrottlerGuard extends ThrottlerGuard {
     const countResult = results[2];
     const count = typeof countResult[1] === 'number' ? countResult[1] : 0;
 
-    if (count > limit) {
+    if (count >= limit) {
       const response = http.getResponse<Response>();
       response.header('X-RateLimit-Limit', limit.toString());
       response.header('X-RateLimit-Remaining', '0');

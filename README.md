@@ -69,8 +69,13 @@ Authorization: Bearer <access_token>  (or valid session cookie)
 | `POST` | `/auth/logout` | User | Invalidates refresh token and clears session. |
 | `GET` | `/auth/whoami` | User | Returns the current session's user data. |
 | `GET` | `/auth/csrf-token` | User | Retrieves CSRF token for web clients. |
+| `GET` | `/api/users/me` | User | Returns the current authenticated user's profile. |
+| `POST` | `/api/users` | Admin | Creates a new user. |
+| `GET` | `/api/users/:githubId` | Admin | Retrieves a user by GitHub ID. |
 | `POST` | `/api/profiles` | Admin | Enriches and stores a new profile. |
 | `GET` | `/api/profiles` | Analyst+ | Advanced filtered search with HATEOAS. |
+| `GET` | `/api/profiles/:id` | Analyst+ | Retrieves a single profile by ID. |
+| `DELETE` | `/api/profiles/:id` | Admin | Deletes a profile by ID. |
 | `GET` | `/api/profiles/search` | Analyst+ | Natural Language Query search. |
 | `GET` | `/api/profiles/export` | Analyst+ | Streams filtered CSV (Requires `?format=csv`). |
 

@@ -28,7 +28,7 @@ type SeedProfile = {
   created_at?: string;
 };
 
-type SeedAdmin = {
+type SeedUser = {
   githubId: string;
   name: string;
   email: string;
@@ -41,10 +41,10 @@ async function main() {
   const profileRaw = await readFile(profilePath, 'utf-8');
   const { profiles } = JSON.parse(profileRaw) as { profiles: SeedProfile[] };
 
-  // Seed Admin User
-  const adminPath = path.join(process.cwd(), 'prisma', 'admin_seed.json');
-  const adminRaw = await readFile(adminPath, 'utf-8');
-  const adminData = JSON.parse(adminRaw) as SeedAdmin;
+  // Seed Users
+  const usersPath = path.join(process.cwd(), 'prisma', 'seed_users.json');
+  const usersRaw = await readFile(usersPath, 'utf-8');
+  const { users } = JSON.parse(usersRaw) as { users: SeedUser[] };
 
   for (const profile of profiles) {
     const normalizedName = profile.name.toLowerCase().trim();
@@ -77,22 +77,24 @@ async function main() {
     });
   }
 
-  // Seed the admin user
-  await prisma.user.upsert({
-    where: { githubId: adminData.githubId },
-    update: {
-      name: adminData.name,
-      email: adminData.email,
-      role: adminData.role,
-    },
-    create: {
-      id: uuidv7(),
-      githubId: adminData.githubId,
-      name: adminData.name.toLowerCase().trim(),
-      email: adminData.email,
-      role: adminData.role,
-    },
-  });
+  // Seed users
+  for (const userData of users) {
+    await prisma.user.upsert({
+      where: { githubId: userData.githubId },
+      update: {
+        name: userData.name,
+        email: userData.email,
+        role: userData.role,
+      },
+      create: {
+        id: uuidv7(),
+        githubId: userData.githubId,
+        name: userData.name.toLowerCase().trim(),
+        email: userData.email,
+        role: userData.role,
+      },
+    });
+  }
 }
 
 main()

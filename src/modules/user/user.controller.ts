@@ -1,15 +1,31 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { Roles } from '@core/decorators/roles.decorator';
-import { Role } from '@prisma/client';
+import { Role, User } from '@prisma/client';
+
+interface RequestWithUser extends Request {
+  user: User;
+}
 
 @ApiTags('users')
 @Controller('users')
 @Roles(Role.ADMIN)
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  @Get('me')
+  @Roles(Role.ADMIN, Role.ANALYST)
+  @ApiOperation({ summary: 'Get current authenticated user profile' })
+  @ApiResponse({ status: 200, description: 'Current user profile.' })
+  me(@Req() req: RequestWithUser) {
+    return {
+      status: 'success',
+      data: req.user,
+    };
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new user' })

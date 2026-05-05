@@ -9,12 +9,14 @@ import {
 } from './types/profiles.types';
 import { buildProfileQuery } from './utils/build-profile-query';
 import { BuildProfileQueryInput } from './types/profile-query.types';
+import { normalizeFilters, buildCacheKey } from './utils/normalize-filters';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { Prisma } from '@prisma/client';
+import { Prisma, Profile } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
 import { ExternalApiError } from '@core/errors/ExternalApiError';
 import { ProfilesRepository } from './repositories/profiles.repository';
 import { ConfigService } from '@config/config.service';
+import { RedisService } from '@infrastructure/redis/redis.service';
 
 // Check it here, outside the class
 const PROXY_URL = process.env.PROXY_URL;
@@ -32,6 +34,7 @@ export class ProfilesService {
     private readonly httpService: HttpService,
     private readonly profilesRepository: ProfilesRepository,
     private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
     @Inject(Logger) private readonly logger: Logger,
   ) {}
 
@@ -214,6 +217,8 @@ export class ProfilesService {
       created_at: new Date(),
     });
 
+    await this.invalidateQueryCache();
+
     return {
       existing: false,
       profile: newProfile,
@@ -231,31 +236,47 @@ export class ProfilesService {
   }
 
   /**
-   * Retrieves all profiles with optional filtering.
+   * Retrieves all profiles with optional filtering, backed by a Redis query cache.
    *
-   * @param filters - An object containing optional filters for gender, country_id, and age_group.
-   * @returns A promise that resolves to an object containing the total count and the list of profiles.
+   * Normalizes the filter object before cache key generation so that semantically
+   * identical queries (different casing, key order) share one cache entry.
+   * TTL is 5 minutes — acceptable staleness for analytics workloads.
    */
   async findAllProfiles(query: BuildProfileQueryInput) {
-    const { where, orderBy, skip, take, page, limit } =
-      buildProfileQuery(query);
+    const redis = this.redisService.getClient();
+    const cacheKey = buildCacheKey(query);
+
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      // JSON.parse returns any; cast is safe because the key is built from the
+      // same type that was stored, so the shape is guaranteed.
+      const parsed = JSON.parse(cached) as {
+        page: number;
+        limit: number;
+        total: number;
+        data: Array<Omit<Profile, 'created_at'> & { created_at: string }>;
+      };
+      return {
+        ...parsed,
+        data: parsed.data.map((p) => ({
+          ...p,
+          created_at: new Date(p.created_at),
+        })),
+      };
+    }
+
+    const { where, orderBy, skip, take, page, limit } = buildProfileQuery(
+      normalizeFilters(query),
+    );
 
     const [total, data] = await Promise.all([
       this.profilesRepository.count(where),
-      this.profilesRepository.findMany({
-        where,
-        orderBy,
-        skip,
-        take,
-      }),
+      this.profilesRepository.findMany({ where, orderBy, skip, take }),
     ]);
 
-    return {
-      page,
-      limit,
-      total,
-      data,
-    };
+    const result = { page, limit, total, data };
+    await redis.setex(cacheKey, 300, JSON.stringify(result));
+    return result;
   }
 
   /**
@@ -267,12 +288,22 @@ export class ProfilesService {
    */
   async deleteProfile(id: string) {
     try {
-      return await this.profilesRepository.delete(id);
+      const deleted = await this.profilesRepository.delete(id);
+      await this.invalidateQueryCache();
+      return deleted;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         throw new NotFoundException('Profile not found');
       }
       throw error;
+    }
+  }
+
+  private async invalidateQueryCache(): Promise<void> {
+    const redis = this.redisService.getClient();
+    const keys = await redis.keys('profiles:*');
+    if (keys.length > 0) {
+      await redis.del(keys);
     }
   }
 }

@@ -13,9 +13,10 @@ if (typeof dbUrl !== 'string' || dbUrl.trim() === '') {
   throw new Error('DATABASE_URL environment variable is missing.');
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
 const pool = new Pool({
   connectionString: dbUrl,
-  ssl: { rejectUnauthorized: false },
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });

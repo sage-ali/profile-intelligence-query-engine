@@ -33,7 +33,8 @@ export class RefreshTokenDto {
 }
 
 export class GitHubLoginQueryDto {
-  @ApiProperty({ enum: ['web', 'cli'] })
+  @ApiProperty({ enum: ['web', 'cli'], required: false })
+  @IsOptional()
   @IsEnum(['web', 'cli'])
   client_type: 'web' | 'cli' = 'web';
 

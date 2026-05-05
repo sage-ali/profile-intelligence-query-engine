@@ -8,6 +8,7 @@ import {
   Headers,
   Res,
   UnauthorizedException,
+  BadRequestException,
   Query,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -52,15 +53,55 @@ export class AuthController {
   async githubCallback(
     @Query('code') code: string,
     @Query('state') state: string,
+    @Query('client_type') clientTypeParam: string,
     @Res({ passthrough: true }) res: Response,
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
   ) {
+    if (!code) {
+      throw new BadRequestException({
+        status: 'error',
+        message: 'Missing code parameter',
+      });
+    }
+
+    if (!state && code !== 'test_code') {
+      throw new BadRequestException({
+        status: 'error',
+        message: 'Missing state parameter',
+      });
+    }
+
     if (code === 'test_code') {
       const tokens: AuthTokens = await this.authService.issueAdminTestTokens({
         ip,
         userAgent,
       });
+
+      if (clientTypeParam === 'web') {
+        const csrfToken = CsrfUtil.generateToken();
+        const sameSite = this.config.isProduction ? 'none' : 'lax';
+        res.cookie('access_token', tokens.accessToken, {
+          httpOnly: true,
+          secure: this.config.isProduction,
+          sameSite,
+          maxAge: Number(this.config.auth.jwtAccessExpiration) * 1000,
+        });
+        res.cookie('refresh_token', tokens.refreshToken, {
+          httpOnly: true,
+          secure: this.config.isProduction,
+          sameSite,
+          maxAge: Number(this.config.auth.jwtRefreshExpiration) * 1000,
+        });
+        res.cookie('csrf_token', csrfToken, {
+          httpOnly: false,
+          secure: this.config.isProduction,
+          sameSite,
+          maxAge: Number(this.config.auth.jwtRefreshExpiration) * 1000,
+        });
+        return res.redirect(this.config.auth.frontendUrl!);
+      }
+
       return res.json({
         status: 'success',
         access_token: tokens.accessToken,
@@ -78,27 +119,28 @@ export class AuthController {
 
     if (clientType === 'web') {
       const csrfToken = CsrfUtil.generateToken();
+      const sameSite = this.config.isProduction ? 'none' : 'lax';
 
       res.cookie('access_token', tokens.accessToken, {
         httpOnly: true,
         secure: this.config.isProduction,
-        sameSite: 'lax',
-        maxAge: 3 * 60 * 1000,
+        sameSite,
+        maxAge: Number(this.config.auth.jwtAccessExpiration) * 1000,
       });
 
       res.cookie('refresh_token', tokens.refreshToken, {
         httpOnly: true,
         secure: this.config.isProduction,
-        sameSite: 'lax',
-        maxAge: 5 * 60 * 1000,
+        sameSite,
+        maxAge: Number(this.config.auth.jwtRefreshExpiration) * 1000,
       });
 
       // CSRF token cookie (readable by JavaScript for double-submit pattern)
       res.cookie('csrf_token', csrfToken, {
         httpOnly: false, // Must be readable by client-side JavaScript
         secure: this.config.isProduction,
-        sameSite: 'lax',
-        maxAge: 5 * 60 * 1000, // Same lifetime as refresh token
+        sameSite,
+        maxAge: Number(this.config.auth.jwtRefreshExpiration) * 1000, // Same lifetime as refresh token
       });
 
       return res.redirect(this.config.auth.frontendUrl!);
@@ -136,27 +178,28 @@ export class AuthController {
 
     if (cookies['refresh_token']) {
       const csrfToken = CsrfUtil.generateToken();
+      const sameSite = this.config.isProduction ? 'none' : 'lax';
 
       res.cookie('access_token', tokens.accessToken, {
         httpOnly: true,
         secure: this.config.isProduction,
-        sameSite: 'lax',
-        maxAge: 3 * 60 * 1000,
+        sameSite,
+        maxAge: Number(this.config.auth.jwtAccessExpiration) * 1000,
       });
 
       res.cookie('refresh_token', tokens.refreshToken, {
         httpOnly: true,
         secure: this.config.isProduction,
-        sameSite: 'lax',
-        maxAge: 5 * 60 * 1000,
+        sameSite,
+        maxAge: Number(this.config.auth.jwtRefreshExpiration) * 1000,
       });
 
       // Regenerate CSRF token on refresh for additional security
       res.cookie('csrf_token', csrfToken, {
         httpOnly: false,
         secure: this.config.isProduction,
-        sameSite: 'lax',
-        maxAge: 5 * 60 * 1000,
+        sameSite,
+        maxAge: Number(this.config.auth.jwtRefreshExpiration) * 1000,
       });
     }
 
@@ -178,9 +221,11 @@ export class AuthController {
     const refreshToken =
       refreshTokenDto?.refresh_token ?? cookies['refresh_token'];
 
-    if (refreshToken) {
-      await this.authService.logout(refreshToken);
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token missing');
     }
+
+    await this.authService.logout(refreshToken);
 
     res.clearCookie('access_token');
     res.clearCookie('refresh_token');

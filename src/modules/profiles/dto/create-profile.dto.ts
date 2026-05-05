@@ -21,7 +21,7 @@ function IsAlphabeticName(validationOptions?: ValidationOptions) {
       validator: {
         validate(value: unknown) {
           if (typeof value !== 'string' || value.length === 0) return true;
-          return /^[\p{L}'-]+$/u.test(value);
+          return /^[\p{L}' -]+$/u.test(value);
         },
       },
     });

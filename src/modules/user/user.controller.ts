@@ -21,9 +21,22 @@ export class UserController {
   @ApiOperation({ summary: 'Get current authenticated user profile' })
   @ApiResponse({ status: 200, description: 'Current user profile.' })
   me(@Req() req: RequestWithUser) {
+    const u = req.user;
     return {
       status: 'success',
-      data: req.user,
+      data: {
+        id: u.id,
+        github_id: u.githubId,
+        username: u.username,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        avatar_url: u.avatarUrl,
+        is_active: u.isActive,
+        last_login_at: u.lastLoginAt,
+        created_at: u.createdAt,
+        updated_at: u.updatedAt,
+      },
     };
   }
 

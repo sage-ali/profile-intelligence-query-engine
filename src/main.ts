@@ -10,7 +10,6 @@ import { Logger } from 'nestjs-pino';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import { ApiVersionGuard } from '@core/guards/api-version.guard';
 import { Request } from 'express';
 
 dotenv.config();
@@ -30,14 +29,22 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
   app.use(cookieParser());
 
-  // Enable CORS
   app.enableCors({
-    origin: '*',
+    origin: true,
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-API-Version',
+      'X-CSRF-Token',
+    ],
+    exposedHeaders: [
+      'X-RateLimit-Limit',
+      'X-RateLimit-Remaining',
+      'X-RateLimit-Reset',
+    ],
   });
-
-  // Check if the right version accessed
-  app.useGlobalGuards(new ApiVersionGuard());
 
   // Enable global validation
   app.useGlobalPipes(

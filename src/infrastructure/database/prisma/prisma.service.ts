@@ -21,7 +21,7 @@ export class PrismaService
    *
    * @throws {Error} If the `DATABASE_URL` environment variable is missing or empty.
    */
-  constructor(private readonly configService: ConfigService) {
+  constructor(configService: ConfigService) {
     const { url: dbUrl } = configService.database;
 
     if (typeof dbUrl !== 'string' || dbUrl.trim() === '') {
@@ -31,9 +31,10 @@ export class PrismaService
     }
 
     // 1. Wrap the database connection string in the Prisma 7 adapter
+    const isProduction = process.env.NODE_ENV === 'production';
     const pool = new Pool({
       connectionString: dbUrl,
-      ssl: { rejectUnauthorized: false },
+      ssl: isProduction ? { rejectUnauthorized: false } : false,
     });
     const adapter = new PrismaPg(pool);
 

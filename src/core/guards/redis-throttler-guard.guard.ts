@@ -42,7 +42,7 @@ export class RedisThrottlerGuard extends ThrottlerGuard {
     if (throttler.name === 'api' && isAuthRoute) return true;
 
     const tracker = await this.getTracker(request);
-    const key = `throttler:${tracker}:${throttler.name}`;
+    const key = `throttler:${tracker}:${throttler.name}:${request.path}`;
     const now = Date.now();
     const windowStart = now - ttl;
 
@@ -68,12 +68,14 @@ export class RedisThrottlerGuard extends ThrottlerGuard {
     const countResult = results[2];
     const count = typeof countResult[1] === 'number' ? countResult[1] : 0;
 
-    if (count >= limit) {
-      const response = http.getResponse<Response>();
-      response.header('X-RateLimit-Limit', limit.toString());
-      response.header('X-RateLimit-Remaining', '0');
-      response.header('X-RateLimit-Reset', Math.ceil(ttl / 1000).toString());
+    const response = http.getResponse<Response>();
+    const remaining = Math.max(0, limit - count);
+    response.header('X-RateLimit-Limit', limit.toString());
+    response.header('X-RateLimit-Remaining', remaining.toString());
+    response.header('X-RateLimit-Reset', Math.ceil(ttl / 1000).toString());
 
+    if (count > limit) {
+      response.header('X-RateLimit-Remaining', '0');
       await this.throwThrottlingException();
     }
 

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { Readable } from 'stream';
 import {
   GenderizeResponse,
   AgifyResponse,
@@ -10,11 +11,13 @@ import {
 import { buildProfileQuery } from './utils/build-profile-query';
 import { BuildProfileQueryInput } from './types/profile-query.types';
 import { normalizeFilters, buildCacheKey } from './utils/normalize-filters';
+import { ImportResult } from './types/import-result.types';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { Prisma, Profile } from '@prisma/client';
 import { Logger } from 'nestjs-pino';
 import { ExternalApiError } from '@core/errors/ExternalApiError';
 import { ProfilesRepository } from './repositories/profiles.repository';
+import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { ConfigService } from '@config/config.service';
 import { RedisService } from '@infrastructure/redis/redis.service';
 
@@ -35,6 +38,7 @@ export class ProfilesService {
     private readonly profilesRepository: ProfilesRepository,
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
+    private readonly prisma: PrismaService,
     @Inject(Logger) private readonly logger: Logger,
   ) {}
 
@@ -297,6 +301,144 @@ export class ProfilesService {
       }
       throw error;
     }
+  }
+
+  async importFromCsv(buffer: Buffer): Promise<ImportResult> {
+    const CHUNK_SIZE = 1000;
+    const VALID_GENDERS = new Set(['male', 'female']);
+    const stats: ImportResult = {
+      status: 'success',
+      total_rows: 0,
+      inserted: 0,
+      skipped: 0,
+      reasons: {},
+    };
+
+    const bump = (reason: string): void => {
+      stats.skipped++;
+      stats.reasons[reason] = (stats.reasons[reason] ?? 0) + 1;
+    };
+
+    let chunk: Prisma.ProfileCreateManyInput[] = [];
+
+    let isFirstLine = true;
+    const lines = Readable.from(buffer.toString('utf-8').split('\n'));
+
+    for await (const raw of lines) {
+      const line = String(raw).trim();
+      if (!line) continue;
+
+      if (isFirstLine) {
+        isFirstLine = false;
+        continue;
+      }
+
+      stats.total_rows++;
+
+      const columns = this.parseCsvLine(line);
+      if (columns === null) {
+        bump('malformed_row');
+        continue;
+      }
+
+      const [name, gender, ageRaw, country_id, country_name] = columns;
+
+      if (!name || !gender || !ageRaw || !country_id || !country_name) {
+        bump('missing_fields');
+        continue;
+      }
+
+      const normalizedGender = gender.toLowerCase();
+      if (!VALID_GENDERS.has(normalizedGender)) {
+        bump('invalid_gender');
+        continue;
+      }
+
+      const age = Number(ageRaw);
+      if (!Number.isInteger(age) || age < 0) {
+        bump('invalid_age');
+        continue;
+      }
+
+      chunk.push({
+        name: name.toLowerCase(),
+        gender: normalizedGender,
+        gender_probability: 0,
+        age,
+        age_group: this.getAgeGroup(age),
+        country_id: country_id.toUpperCase(),
+        country_name,
+        country_probability: 0,
+        created_at: new Date(),
+      });
+
+      if (chunk.length >= CHUNK_SIZE) {
+        const inserted = await this.flushChunk(chunk);
+        stats.inserted += inserted;
+        const duplicates = chunk.length - inserted;
+        if (duplicates > 0) {
+          stats.reasons['duplicate_name'] =
+            (stats.reasons['duplicate_name'] ?? 0) + duplicates;
+          stats.skipped += duplicates;
+        }
+        chunk = [];
+      }
+    }
+
+    if (chunk.length > 0) {
+      const inserted = await this.flushChunk(chunk);
+      stats.inserted += inserted;
+      const duplicates = chunk.length - inserted;
+      if (duplicates > 0) {
+        stats.reasons['duplicate_name'] =
+          (stats.reasons['duplicate_name'] ?? 0) + duplicates;
+        stats.skipped += duplicates;
+      }
+    }
+
+    await this.invalidateQueryCache();
+    return stats;
+  }
+
+  private async flushChunk(
+    rows: Prisma.ProfileCreateManyInput[],
+  ): Promise<number> {
+    const result = await this.prisma.profile.createMany({
+      data: rows,
+      skipDuplicates: true,
+    });
+    return result.count;
+  }
+
+  private parseCsvLine(line: string): string[] | null {
+    const columns: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        columns.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    columns.push(current.trim());
+
+    // Reject lines with wrong column count or encoding issues
+    if (columns.length < 5 || columns.some((c) => c.includes('�'))) {
+      return null;
+    }
+
+    return columns;
   }
 
   private async invalidateQueryCache(): Promise<void> {

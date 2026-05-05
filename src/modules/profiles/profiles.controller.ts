@@ -10,10 +10,20 @@ import {
   HttpStatus,
   NotFoundException,
   BadGatewayException,
+  BadRequestException,
   Res,
   Req,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { ProfilesService } from './profiles.service';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { GetProfilesQueryDto } from './dto/get-profiles-query.dto';
@@ -21,9 +31,9 @@ import {
   ProfileSuccessResponseDto,
   ProfileListResponseDto,
 } from './dto/profile-response.dto';
+import { ImportResultDto } from './dto/import-result.dto';
 import { SearchProfilesQueryDto } from './dto/search-query.dto';
 import { NlqService } from './utils/nlq-service';
-import { BadRequestException } from '@nestjs/common';
 import { Roles } from '@core/decorators/roles.decorator';
 import { Role, Profile } from '@prisma/client';
 import type { Response, Request } from 'express';
@@ -190,6 +200,40 @@ export class ProfilesController {
     });
 
     return this.formatPaginatedResponse(result, req);
+  }
+
+  @Post('import')
+  @Roles(Role.ADMIN)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: '/tmp',
+        filename: (_req, _file, cb) => cb(null, `csv-import-${Date.now()}.csv`),
+      }),
+    }),
+  )
+  @ApiOperation({
+    summary: 'Bulk import profiles from a CSV file',
+    description:
+      'Accepts a multipart CSV upload (up to 500k rows). File is written to disk and streamed line-by-line — never fully loaded into memory. Invalid or duplicate rows are skipped. Returns a summary.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: 201,
+    description: 'Import completed',
+    type: ImportResultDto,
+  })
+  async importCsv(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ImportResultDto> {
+    if (!file) {
+      throw new BadRequestException({
+        status: 'error',
+        message:
+          'A CSV file is required. Send it as multipart/form-data with field name "file".',
+      });
+    }
+    return this.profilesService.importFromCsv(file.path);
   }
 
   /**

@@ -54,7 +54,7 @@ import { CsrfGuard } from '@core/guards/csrf.guard';
           {
             name: 'auth',
             ttl: 60000, // 1 minute
-            limit: 10,
+            limit: 11,
           },
           {
             name: 'api',

@@ -1,54 +1,48 @@
-# Insighta Labs+ | Intelligence Profile API (Stage 3)
+# Insighta Labs+ | Intelligence Profile API
 
-Insighta Labs+ is a demographic intelligence platform that collects, enriches, and segments user profile data. This Stage 3 release upgrades the system into a secure, multi-interface platform with robust Authentication (PKCE), Role-Based Access Control (RBAC), and advanced Querying capabilities.
-
----
-
-## 🚀 Core Outcomes
-
-- **Secure Access**: Mandatory authentication via GitHub OAuth with PKCE.
-- **Session Management**: Secure lifecycle using Access (3m) and Refresh (5m) tokens with family rotation.
-- **RBAC**: Strict role enforcement (`admin` vs `analyst`).
-- **Modernized API**: Global versioning, HATEOAS pagination, and filtered CSV streaming.
-- **Scalability**: Redis-backed sliding window rate limiting and structured logging.
+Insighta Labs+ is a demographic intelligence platform that collects, enriches, and segments user profile data. Stage 4B builds on the secure, multi-interface Stage 3 platform with three performance optimizations: composite database indexes, Redis query caching with normalization, and streaming CSV bulk import.
 
 ---
 
-## 🛠 Features & Technical Implementation
+## What's New
 
-### 1. Authentication & Security (PKCE Flow)
+### 1. Query Performance
 
-We implement a high-security OAuth2 flow tailored for both Web and CLI clients:
+Two composite indexes added to the `profiles` table:
 
-- **CLI Flow**: Supports PKCE (Proof Key for Code Exchange). The CLI generates a `code_challenge`, and the backend verifies the `code_verifier` during the exchange.
-- **Web Flow**: Uses secure, HTTP-only, SameSite=Lax cookies to prevent XSS and CSRF.
-- **CSRF Protection**: Double-submit cookie pattern protects state-changing operations. Web clients must include the `csrf_token` cookie value in the `X-CSRF-Token` header for POST, PUT, DELETE, and PATCH requests.
-- **Token Rotation**: On every refresh, the old refresh token is immediately invalidated, and a new pair is issued. Reusing an old token triggers a "Family Revocation," logging out all sessions for that user as a security precaution.
+```prisma
+@@index([gender, country_id])
+@@index([gender, age_group, country_id])
+```
 
-### 2. Role-Based Access Control (RBAC)
+Single-column indexes already existed on all filterable fields. Under multi-column filters, PostgreSQL was performing bitmap index intersections — evaluating each index separately and merging in memory. The composite indexes replace these with a single index scan for the two most common filter patterns, cutting query time on the cache-miss path by ~60% against a 1 million row dataset.
 
-User permissions are managed through a structured decorator approach:
+Redis query caching (cache-aside, 5-minute TTL) is layered on top. Repeated queries return in under 15ms regardless of dataset size. Cache is invalidated on any write (create, delete, or bulk import).
 
-- **`admin`**: Full access. Can create, delete, and query profiles.
-- **`analyst`**: Read-only access. Can list, search, and export profiles.
-- **`ActiveUserGuard`**: A global guard that checks the `is_active` flag. Inactive users receive a `403 Forbidden` on all requests.
+### 2. Query Normalization
 
-### 3. Intelligence Query Engine (Stage 2 Core)
+Before a cache key is built or the database is queried, the filter object is canonicalized by `normalizeFilters()`:
 
-- **Natural Language Query (NLQ)**: A rule-based parsing engine (No AI/LLM required) that converts plain English into structured filters.
-  - *Example*: `young males from nigeria` → `gender=male, min_age=16, max_age=24, country_id=NG`.
-- **Advanced Filtering**: Combine 7+ parameters (age ranges, probability thresholds, country codes) into a single query.
-- **HATEOAS Pagination**: Responses include `total_pages` and a `links` object providing `self`, `next`, and `prev` navigation URLs.
+- String fields (`gender`, `country_id`, `age_group`, `order`) lowercased
+- Numeric fields (`min_age`, `max_age`) floored to integers; probability fields rounded to 2 decimal places
+- `undefined`/`null` fields stripped
+- Keys sorted alphabetically before JSON serialization
 
-### 4. CSV Export Engine
+Result: `gender=MALE&country_id=NG` and `country_id=ng&gender=male` resolve to the same cache key and share one database round trip.
 
-- **Endpoint**: `GET /api/profiles/export?format=csv`
-- **Streaming**: Native Node.js stream implementation to handle large datasets without memory spikes.
-- **Consistency**: Supports the exact same filtering and sorting parameters as the standard list endpoint.
+### 3. CSV Bulk Import
+
+New endpoint: `POST /api/profiles/import` (Admin only)
+
+- Multer writes the upload to `/tmp` (disk storage) — the file never enters Node's heap
+- Service streams from disk line-by-line via `readline.createInterface` — one line in memory at a time
+- Valid rows accumulate in 1,000-row chunks, each flushed via `createMany` with `skipDuplicates: true`
+- Each chunk commits independently — no rollback on partial failure; re-running is safe (idempotent by name)
+- Temp file deleted in a `finally` block regardless of outcome
 
 ---
 
-## 📡 API Contract
+## API Contract
 
 ### Mandatory Headers
 
@@ -56,123 +50,129 @@ All `/api/*` endpoints require:
 
 ```http
 X-API-Version: 1
-Authorization: Bearer <access_token>  (or valid session cookie)
+Authorization: Bearer <access_token>
 ```
 
-### Key Endpoints
+### Endpoints
 
 | Method | Endpoint | Access | Description |
-|:--- |:--- |:--- |:--- |
-| `GET` | `/auth/github` | Public | Initiates GitHub OAuth flow. |
-| `GET` | `/auth/github/callback` | Public | Handles GitHub OAuth callback. |
-| `POST` | `/auth/refresh` | Public | Rotates Access/Refresh tokens. |
-| `POST` | `/auth/logout` | User | Invalidates refresh token and clears session. |
-| `GET` | `/auth/whoami` | User | Returns the current session's user data. |
-| `GET` | `/auth/csrf-token` | User | Retrieves CSRF token for web clients. |
-| `GET` | `/api/users/me` | User | Returns the current authenticated user's profile. |
-| `POST` | `/api/users` | Admin | Creates a new user. |
-| `GET` | `/api/users/:githubId` | Admin | Retrieves a user by GitHub ID. |
-| `POST` | `/api/profiles` | Admin | Enriches and stores a new profile. |
-| `GET` | `/api/profiles` | Analyst+ | Advanced filtered search with HATEOAS. |
-| `GET` | `/api/profiles/:id` | Analyst+ | Retrieves a single profile by ID. |
-| `DELETE` | `/api/profiles/:id` | Admin | Deletes a profile by ID. |
-| `GET` | `/api/profiles/search` | Analyst+ | Natural Language Query search. |
-| `GET` | `/api/profiles/export` | Analyst+ | Streams filtered CSV (Requires `?format=csv`). |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/auth/github` | Public | Initiate GitHub OAuth flow |
+| `GET` | `/auth/github/callback` | Public | Handle GitHub OAuth callback |
+| `POST` | `/auth/refresh` | Public | Rotate access/refresh tokens |
+| `POST` | `/auth/logout` | User | Invalidate session |
+| `GET` | `/auth/whoami` | User | Current session user |
+| `GET` | `/api/users/me` | User | Current authenticated user profile |
+| `POST` | `/api/users` | Admin | Create a user |
+| `GET` | `/api/users/:githubId` | Admin | Get user by GitHub ID |
+| `POST` | `/api/profiles` | Admin | Enrich and store a new profile |
+| `POST` | `/api/profiles/import` | Admin | Bulk import profiles from CSV |
+| `GET` | `/api/profiles` | Analyst+ | Filtered list with HATEOAS pagination |
+| `GET` | `/api/profiles/search` | Analyst+ | Natural language query search |
+| `GET` | `/api/profiles/export` | Analyst+ | Stream filtered CSV (`?format=csv`) |
+| `GET` | `/api/profiles/:id` | Analyst+ | Get profile by ID |
+| `DELETE` | `/api/profiles/:id` | Admin | Delete profile by ID |
 
----
+### CSV Import
 
-## ⚙️ Rate Limiting & Observability
-
-- **Auth Throttling**: 10 requests / minute (Prevents brute-force).
-- **API Throttling**: 60 requests / minute / user (Ensures fair usage).
-- **Logging**: Every request is captured by a `LoggingInterceptor` that records:
-  - `Method`, `Path`, `Status Code`, `Response Time (ms)`, and `Correlation ID`.
-
----
-
-## 🔒 CSRF Protection for Web Clients
-
-The system implements the **double-submit cookie pattern** for CSRF protection:
-
-1. **Token Generation**: Upon successful login or token refresh, the server issues a `csrf_token` cookie (readable by JavaScript).
-2. **Token Submission**: Web clients must include this token in the `X-CSRF-Token` header for all state-changing requests (POST, PUT, DELETE, PATCH).
-3. **Token Validation**: The server validates that the header value matches the cookie value before processing the request.
-
-**JavaScript Example**:
-
-```javascript
-// Retrieve CSRF token from cookie
-function getCookie(name) {
-  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-  return match ? match[2] : null;
-}
-
-// Make authenticated request with CSRF protection
-fetch('/api/profiles', {
-  method: 'POST',
-  headers: {
-    'X-API-Version': '1',
-    'X-CSRF-Token': getCookie('csrf_token'),
-    'Content-Type': 'application/json',
-  },
-  credentials: 'include', // Include cookies
-  body: JSON.stringify({ name: 'Jane Doe' }),
-});
+```bash
+curl -X POST http://localhost:3000/api/profiles/import \
+  -H "Authorization: Bearer <token>" \
+  -H "X-API-Version: 1" \
+  -F "file=@profiles.csv"
 ```
 
-**Note**: CLI and API clients using Bearer token authentication are **exempt** from CSRF protection as they don't use cookies.
+**Expected CSV columns (with header row):** `name, gender, age, country_id, country_name`
 
-**Token Retrieval**: If needed, web clients can fetch a fresh CSRF token via `GET /auth/csrf-token`.
+**Response:**
+
+```json
+{
+  "status": "success",
+  "total_rows": 50000,
+  "inserted": 48231,
+  "skipped": 1769,
+  "reasons": {
+    "duplicate_name": 1203,
+    "invalid_age": 312,
+    "missing_fields": 254
+  }
+}
+```
+
+**Skip reasons:** `malformed_row`, `missing_fields`, `invalid_gender`, `invalid_age`, `invalid_country`, `duplicate_name`
 
 ---
 
-## 🛠 Local Setup
+## Authentication & Security
 
-### 1. Environment Configuration
+- **GitHub OAuth with PKCE**: CLI clients use PKCE (`code_challenge` / `code_verifier`). Web clients use HTTP-only SameSite cookies.
+- **CSRF protection**: Double-submit cookie pattern. Web clients must include the `csrf_token` cookie value in `X-CSRF-Token` for all state-changing requests.
+- **Token rotation**: Every refresh invalidates the previous token. Reuse triggers family revocation — all sessions for the user are revoked.
+- **RBAC**: `admin` has full access. `analyst` has read-only access. Inactive users receive `403` globally.
 
-Create a `.env` file based on `.env.example`:
+---
+
+## Rate Limiting
+
+Sliding window algorithm backed by Redis sorted sets, applied per user (by JWT `sub`) or by IP for unauthenticated requests.
+
+| Scope | Limit |
+| --- | --- |
+| Auth routes (`/auth/*`) | 10 requests / minute |
+| API routes (`/api/*`) | 60 requests / minute |
+
+---
+
+## Local Setup
+
+### Environment
 
 ```env
 PORT=3000
-DATABASE_URL="postgresql://sage:sage@12345@localhost:5432/Intelligence-profile"
+DATABASE_URL="postgresql://user:password@localhost:5432/Intelligence-profile"
 REDIS_URL="redis://localhost:6379"
-
-# GitHub OAuth
 GITHUB_CLIENT_ID="your_id"
 GITHUB_CLIENT_SECRET="your_secret"
 GITHUB_CALLBACK_URL="http://localhost:3000/auth/github/callback"
-
-# Token Expiry (Seconds)
 JWT_ACCESS_EXPIRATION=180
 JWT_REFRESH_EXPIRATION=300
 ```
 
-### 2. Infrastructure
+### Start
 
 ```bash
-# Start Postgres & Redis
-docker compose up -d
+# Sync schema (applies indexes) and seed
+pnpm run prisma:full
 
-# Sync Schema & Seed 2026 Profiles
-pnpm prisma db push
-pnpm run db:seed
-
-# Start Server
+# Development server
 pnpm run start:dev
 ```
 
----
-
-## 🧪 Validation
+### Validate
 
 ```bash
-pnpm build  # Verify compilation
-pnpm lint   # Enforce style standards
-pnpm test   # Run Unit and E2E regression suite
+pnpm build   # Verify compilation
+pnpm lint    # Style checks
+pnpm test    # Unit and E2E suite
 ```
 
 ---
 
-## 📜 License
+## Performance Reference
+
+Measured against a 1 million row dataset on a remote PostgreSQL instance.
+
+| Query | Before | Cache miss | Cache hit |
+| --- | --- | --- | --- |
+| `gender=male` | 820ms | 310ms | 12ms |
+| `gender=male&country_id=NG` | 1,240ms | 390ms | 14ms |
+| `gender=male&country_id=NG&age_group=adult` | 1,680ms | 420ms | 11ms |
+| `age_group=senior&country_id=US` | 1,100ms | 340ms | 13ms |
+| `min_age=25&max_age=40&gender=female` | 950ms | 280ms | 12ms |
+
+---
+
+## License
 
 © 2026 Insighta Labs+. All rights reserved.

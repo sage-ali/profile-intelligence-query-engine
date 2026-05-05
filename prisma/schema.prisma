@@ -72,4 +72,6 @@ model Profile {
   @@index([created_at])
   @@index([gender_probability])
   @@index([country_probability])
+  @@index([gender, country_id])
+  @@index([gender, age_group, country_id])
 }

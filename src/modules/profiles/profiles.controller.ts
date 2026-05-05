@@ -17,6 +17,7 @@ import {
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
 import {
   ApiTags,
   ApiOperation,
@@ -203,11 +204,18 @@ export class ProfilesController {
 
   @Post('import')
   @Roles(Role.ADMIN)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: '/tmp',
+        filename: (_req, _file, cb) => cb(null, `csv-import-${Date.now()}.csv`),
+      }),
+    }),
+  )
   @ApiOperation({
     summary: 'Bulk import profiles from a CSV file',
     description:
-      'Accepts a multipart CSV upload (up to 500k rows). Processes rows in streaming chunks. Invalid or duplicate rows are skipped and counted. Returns a summary of the import.',
+      'Accepts a multipart CSV upload (up to 500k rows). File is written to disk and streamed line-by-line — never fully loaded into memory. Invalid or duplicate rows are skipped. Returns a summary.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({
@@ -225,7 +233,7 @@ export class ProfilesController {
           'A CSV file is required. Send it as multipart/form-data with field name "file".',
       });
     }
-    return this.profilesService.importFromCsv(file.buffer);
+    return this.profilesService.importFromCsv(file.path);
   }
 
   /**

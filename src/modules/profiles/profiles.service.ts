@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { Readable } from 'stream';
+import { createReadStream } from 'fs';
+import { unlink } from 'fs/promises';
+import { createInterface } from 'readline';
 import {
   GenderizeResponse,
   AgifyResponse,
@@ -303,9 +305,10 @@ export class ProfilesService {
     }
   }
 
-  async importFromCsv(buffer: Buffer): Promise<ImportResult> {
+  async importFromCsv(filePath: string): Promise<ImportResult> {
     const CHUNK_SIZE = 1000;
     const VALID_GENDERS = new Set(['male', 'female']);
+    const COUNTRY_ID_RE = /^[A-Za-z]{2}$/;
     const stats: ImportResult = {
       status: 'success',
       total_rows: 0,
@@ -321,58 +324,82 @@ export class ProfilesService {
 
     let chunk: Prisma.ProfileCreateManyInput[] = [];
 
+    // Stream from disk line-by-line — file never fully loaded into heap.
+    const rl = createInterface({
+      input: createReadStream(filePath, { encoding: 'utf-8' }),
+      crlfDelay: Infinity,
+    });
+
     let isFirstLine = true;
-    const lines = Readable.from(buffer.toString('utf-8').split('\n'));
 
-    for await (const raw of lines) {
-      const line = String(raw).trim();
-      if (!line) continue;
+    try {
+      for await (const raw of rl) {
+        const line = raw.trim();
+        if (!line) continue;
 
-      if (isFirstLine) {
-        isFirstLine = false;
-        continue;
+        if (isFirstLine) {
+          isFirstLine = false;
+          continue;
+        }
+
+        stats.total_rows++;
+
+        const columns = this.parseCsvLine(line);
+        if (columns === null) {
+          bump('malformed_row');
+          continue;
+        }
+
+        const [name, gender, ageRaw, country_id, country_name] = columns;
+
+        if (!name || !gender || !ageRaw || !country_id || !country_name) {
+          bump('missing_fields');
+          continue;
+        }
+
+        const normalizedGender = gender.toLowerCase();
+        if (!VALID_GENDERS.has(normalizedGender)) {
+          bump('invalid_gender');
+          continue;
+        }
+
+        const age = Number(ageRaw);
+        if (!Number.isInteger(age) || age < 0) {
+          bump('invalid_age');
+          continue;
+        }
+
+        if (!COUNTRY_ID_RE.test(country_id)) {
+          bump('invalid_country');
+          continue;
+        }
+
+        chunk.push({
+          name: name.toLowerCase(),
+          gender: normalizedGender,
+          gender_probability: 0,
+          age,
+          age_group: this.getAgeGroup(age),
+          country_id: country_id.toUpperCase(),
+          country_name,
+          country_probability: 0,
+          created_at: new Date(),
+        });
+
+        if (chunk.length >= CHUNK_SIZE) {
+          const inserted = await this.flushChunk(chunk);
+          stats.inserted += inserted;
+          const duplicates = chunk.length - inserted;
+          if (duplicates > 0) {
+            stats.reasons['duplicate_name'] =
+              (stats.reasons['duplicate_name'] ?? 0) + duplicates;
+            stats.skipped += duplicates;
+          }
+          chunk = [];
+        }
       }
 
-      stats.total_rows++;
-
-      const columns = this.parseCsvLine(line);
-      if (columns === null) {
-        bump('malformed_row');
-        continue;
-      }
-
-      const [name, gender, ageRaw, country_id, country_name] = columns;
-
-      if (!name || !gender || !ageRaw || !country_id || !country_name) {
-        bump('missing_fields');
-        continue;
-      }
-
-      const normalizedGender = gender.toLowerCase();
-      if (!VALID_GENDERS.has(normalizedGender)) {
-        bump('invalid_gender');
-        continue;
-      }
-
-      const age = Number(ageRaw);
-      if (!Number.isInteger(age) || age < 0) {
-        bump('invalid_age');
-        continue;
-      }
-
-      chunk.push({
-        name: name.toLowerCase(),
-        gender: normalizedGender,
-        gender_probability: 0,
-        age,
-        age_group: this.getAgeGroup(age),
-        country_id: country_id.toUpperCase(),
-        country_name,
-        country_probability: 0,
-        created_at: new Date(),
-      });
-
-      if (chunk.length >= CHUNK_SIZE) {
+      if (chunk.length > 0) {
         const inserted = await this.flushChunk(chunk);
         stats.inserted += inserted;
         const duplicates = chunk.length - inserted;
@@ -381,23 +408,13 @@ export class ProfilesService {
             (stats.reasons['duplicate_name'] ?? 0) + duplicates;
           stats.skipped += duplicates;
         }
-        chunk = [];
       }
-    }
 
-    if (chunk.length > 0) {
-      const inserted = await this.flushChunk(chunk);
-      stats.inserted += inserted;
-      const duplicates = chunk.length - inserted;
-      if (duplicates > 0) {
-        stats.reasons['duplicate_name'] =
-          (stats.reasons['duplicate_name'] ?? 0) + duplicates;
-        stats.skipped += duplicates;
-      }
+      await this.invalidateQueryCache();
+      return stats;
+    } finally {
+      await unlink(filePath).catch(() => {});
     }
-
-    await this.invalidateQueryCache();
-    return stats;
   }
 
   private async flushChunk(
